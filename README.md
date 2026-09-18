@@ -38,18 +38,6 @@ CSS, accessibility, or application behavior.
 - `styles.css`: page styles and responsive layout.
 - `script.js`: browser behavior.
 - `scripts/check.py`: dependency-free scaffold checks.
-- `AGENTS.md`: instructions for LLM coding agents.
-
-## Working with an LLM
-
-Open this repository as the agent's workspace and have it read `AGENTS.md` before
-making changes. Give it a concrete feature or bug, expected behavior, and any
-constraints. The agent can use the local server and validation command above.
-No model API key or hosted service is required for the project itself.
-
-Install Git separately if your environment does not provide it on PATH; it is
-needed for reviewing diffs and version control, but not for running the site.
-Keep credentials out of browser code and committed files.
 
 ## License
 
