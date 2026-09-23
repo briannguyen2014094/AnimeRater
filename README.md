@@ -1,43 +1,53 @@
 # AnimeRater
 
-A starting point for an anime rating web app, built with plain HTML, CSS, and
-JavaScript. The current page is a minimal scaffold; rating features are not yet
-implemented. There is no backend, build step, or external dependency.
+A starter website for rating anime, made with HTML, CSS, and JavaScript.
+Rating features are not available yet. There is no server-side app, and you
+do not need to build the site or install extra packages.
 
-## Local development
+## Run the site on your computer
 
-Requires Python 3.10 or newer. From the repository root:
+You need Python 3.10 or newer. Open a terminal in the AnimeRater folder and run:
 
 ```sh
 python -m http.server 8000 --bind 127.0.0.1
 ```
 
-Open <http://127.0.0.1:8000>. Edit the files and refresh the browser to see changes.
-Stop the server with Ctrl+C. If port 8000 is occupied, choose another port.
-On systems where Python is named `python3`, use that command instead.
-This server is for local development only.
+Open <http://127.0.0.1:8000> in your browser. After editing a file, refresh the
+page to see your changes.
 
-## Validation
+Press Ctrl+C in the terminal to stop the site. If port 8000 is already in use,
+replace `8000` with `8001` in both the command and the browser address.
+If your computer uses `python3` instead of `python`, use `python3` in the commands.
+This command is only for testing the site on your own computer.
+
+## Check the files
+
+Run this command from the AnimeRater folder:
 
 ```sh
 python scripts/check.py
 ```
 
-Checks that the starter files exist, the HTML has a language and title, and local
-script and stylesheet references resolve within the repository. If Node.js is
-installed, it also checks JavaScript syntax; otherwise it explicitly reports that
-check as skipped. No packages need to be installed.
+This checks that the required files exist, the page has a language and title,
+and links to local JavaScript and CSS files point to files inside the project.
+If Node.js is installed, it also checks for JavaScript syntax errors. Otherwise,
+it tells you that this check was skipped. No extra packages are needed.
 
-For UI changes, also open the page in a browser, check the console, and verify
-keyboard access and narrow-screen layout. The automated check does not validate
-CSS, accessibility, or application behavior.
+After changing how the page looks or works, also test it in your browser:
 
-## Project map
+- Look for errors in the browser's developer console.
+- Make sure you can use the page with a keyboard.
+- Check that the page fits a narrow window, such as a phone screen.
 
-- `index.html`: page structure and accessible markup.
-- `styles.css`: page styles and responsive layout.
-- `script.js`: browser behavior.
-- `scripts/check.py`: dependency-free scaffold checks.
+The check command does not test page styles, ease of use for people with
+disabilities, or whether the site's features work.
+
+## What each file does
+
+- `index.html`: the page's content and structure.
+- `styles.css`: how the page looks and fits different screen sizes.
+- `script.js`: what the page does when you interact with it.
+- `scripts/check.py`: checks the basic project files.
 
 ## License
 
