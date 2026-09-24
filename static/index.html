@@ -1,16 +1,26 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AnimeRater</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="script.js" defer></script>
-  </head>
-  <body>
-    <main>
-      <h1>AnimeRater</h1>
-      <p>Your anime rating app starts here.</p>
-    </main>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <title>AnimeRater - Browse Top Anime</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>AnimeRater</h1>
+  </header>
+
+  <main>
+    <div id="anime-grid" class="grid-container">
+    </div>
+
+    <div class="pagination">
+      <button id="prev-btn" disabled>&larr; Previous</button>
+      <span id="page-indicator">Page 1</span>
+      <button id="next-btn">Next &rarr;</button>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
 </html>
