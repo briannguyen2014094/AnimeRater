@@ -1,25 +1,43 @@
 # AnimeRater
 
-A starter website for rating anime, made with HTML, CSS, and JavaScript.
-Rating features are not available yet. There is no server-side app, and you
-do not need to build the site.
+A starter website for rating anime, made with HTML, CSS, JavaScript, and a
+Python FastAPI backend. Rating features are not available yet. You do not
+need to build the site.
 
 ## Run the site on your computer
 
-You need Python 3.10 or newer. Open a terminal in the AnimeRater folder and run:
+You need Python 3.10 or newer. Open a terminal in the AnimeRater folder.
+Create a virtual environment and install the dependencies, including Uvicorn
+to run the FastAPI app.
+
+On Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt uvicorn
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+On macOS or Linux:
 
 ```sh
-pip install -r requirements.txt
-python -m http.server 8000 --bind 127.0.0.1
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt uvicorn
+.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Open <http://127.0.0.1:8000> in your browser. After editing a file, refresh the
 page to see your changes.
 
+Keep the terminal running while using the site. On subsequent runs, use only
+the Uvicorn command for your operating system. Internet access is needed to
+fetch anime from AniList; no API key or database setup is required for the
+current catalog page. Use the FastAPI app rather than `python -m http.server`,
+which does not provide the catalog API.
+
 Press Ctrl+C in the terminal to stop the site. If port 8000 is already in use,
 replace `8000` with `8001` in both the command and the browser address.
-If your computer uses `python3` instead of `python`, use `python3` in the commands.
-This command is only for testing the site on your own computer.
+This server command is only for testing the site on your own computer.
 
 ## Check the files
 
