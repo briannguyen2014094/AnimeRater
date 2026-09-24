@@ -1,43 +1,45 @@
 "use strict";
 
-let currentPage = 1;
+let page = 1;
+let animeList = [];
+
 const $ = (id) => document.getElementById(id);
-const grid = $("anime-grid");
-const indicator = $("page-indicator");
-const prevBtn = $("prev-btn");
-const nextBtn = $("next-btn");
+const grid = $("grid"), pageNum = $("page"), prev = $("prev"), next = $("next"), modal = $("modal"), modalContent = $("modal-content");
 
-async function loadPage(page) {
-    grid.innerHTML = "<p>Loading anime...</p>";
+async function load(p) {
+    grid.innerHTML = "<p>Loading...</p>";
+    const res = await fetch(`/api/catalog/top?page=${p}&limit=25`);
+    const json = await res.json();
+    
+    animeList = json.data || [];
+    page = p;
+    pageNum.textContent = `Page ${page}`;
+    prev.disabled = page <= 1;
 
-    try {
-        const res = await fetch(`/api/catalog/top?page=${page}&limit=25`);
-        const { data } = await res.json();
-
-        if (!data?.length) {
-            grid.innerHTML = "<p>No anime records found or API is unavailable.</p>";
-            return;
-        }
-
-        currentPage = page;
-        indicator.textContent = `Page ${currentPage}`;
-        prevBtn.disabled = currentPage <= 1;
-
-        grid.innerHTML = data.map((anime) => `
-        <div class="anime-card">
-            <img src="${anime.image_url || "https://via.placeholder.com/225x320?text=No+Image"}" alt="${anime.title}" loading="lazy" />
-            <div class="card-content">
-            <h3>${anime.title}</h3>
-            <p class="episodes">Episodes: ${anime.episodes || "?"}</p>
-            </div>
+    grid.innerHTML = animeList.map((a, i) => `
+        <div class="card" onclick="openModal(${i})">
+        <img src="${a.image_url || ''}" alt="${a.title}">
+        <div class="card-body">
+            <h3>${a.title}</h3>
+            <p>Score: ${a.score} | Eps: ${a.episodes}</p>
         </div>
-        `).join("");
-    } catch (err) {
-        grid.innerHTML = `<p>Error loading catalog: ${err.message}</p>`;
-    }
+        </div>
+    `).join("");
 }
 
-prevBtn.onclick = () => currentPage > 1 && loadPage(currentPage - 1);
-nextBtn.onclick = () => loadPage(currentPage + 1);
+window.openModal = (i) => {
+    const a = animeList[i];
+    modalContent.innerHTML = `
+        <h2>${a.title}</h2>
+        <p><strong>Genres:</strong> ${a.genres.join(", ") || "None"}</p>
+        <p style="margin-top:10px; font-size:0.9rem; line-height:1.4;">${a.synopsis}</p>
+    `;
+    modal.classList.remove("hidden");
+};
 
-loadPage(1);
+$("close").onclick = () => modal.classList.add("hidden");
+modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
+prev.onclick = () => page > 1 && load(page - 1);
+next.onclick = () => load(page + 1);
+
+load(1);

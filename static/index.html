@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <title>AnimeRater - Browse Top Anime</title>
-  <!-- Add /static/ prefix here -->
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="static/styles.css">
 </head>
 <body>
-  <header>
-    <h1>AnimeRater</h1>
-  </header>
+  <h1>AnimeRater</h1>
+  <div id="grid" class="grid"></div>
+  
+  <div class="pagination">
+    <button id="prev" disabled>&larr; Prev</button>
+    <span id="page">Page 1</span>
+    <button id="next">Next &rarr;</button>
+  </div>
 
-  <main>
-    <div id="anime-grid" class="grid-container"></div>
-
-    <div class="pagination">
-      <button id="prev-btn" disabled>&larr; Previous</button>
-      <span id="page-indicator">Page 1</span>
-      <button id="next-btn">Next &rarr;</button>
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <button id="close">&times;</button>
+      <div id="modal-content"></div>
     </div>
-  </main>
+  </div>
 
-  <!-- Add /static/ prefix here -->
-  <script src="/static/script.js"></script>
+  <script src="static/script.js"></script>
 </body>
 </html>
