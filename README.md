@@ -2,13 +2,14 @@
 
 A starter website for rating anime, made with HTML, CSS, and JavaScript.
 Rating features are not available yet. There is no server-side app, and you
-do not need to build the site or install extra packages.
+do not need to build the site.
 
 ## Run the site on your computer
 
 You need Python 3.10 or newer. Open a terminal in the AnimeRater folder and run:
 
 ```sh
+pip install -r requirements.txt
 python -m http.server 8000 --bind 127.0.0.1
 ```
 
@@ -44,9 +45,9 @@ disabilities, or whether the site's features work.
 
 ## What each file does
 
-- `index.html`: the page's content and structure.
-- `styles.css`: how the page looks and fits different screen sizes.
-- `script.js`: what the page does when you interact with it.
+- `static/index.html`: the page's content and structure.
+- `static/styles.css`: how the page looks and fits different screen sizes.
+- `static/script.js`: what the page does when you interact with it.
 - `scripts/check.py`: checks the basic project files.
 
 ## License
