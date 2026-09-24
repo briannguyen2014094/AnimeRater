@@ -1,0 +1,1 @@
+# define data structures and database tables here as python classes
