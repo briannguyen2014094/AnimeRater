@@ -7,9 +7,7 @@ import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
-
-ROOT = Path(__file__).resolve().parents[1]
-
+ROOT = Path(__file__).resolve().parents[1] / "static"
 
 class PageParser(HTMLParser):
     def __init__(self):
