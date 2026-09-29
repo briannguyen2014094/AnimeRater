@@ -83,6 +83,17 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
+#close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    color: #f8fafc;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
 
 /* Detail Modal */
 
@@ -111,3 +122,82 @@ button:disabled {
   position: relative;
   padding: 24px;
 }
+
+.modal-header {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .modal-cover {
+    width: 160px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  
+  .modal-heading h2 {
+    margin-bottom: 8px;
+  }
+  
+  .modal-stats {
+    display: flex;
+    gap: 12px;
+    color: #94a3b8;
+    font-size: 0.9rem;
+  }
+  
+  .modal-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  
+  .chip {
+    background-color: #334155;
+    color: #e2e8f0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+  }
+  
+  .modal-synopsis h3 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+  
+  .modal-synopsis p {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #cbd5e1;
+  }
+  
+  /* Stack the header on narrow screens */
+  @media (max-width: 480px) {
+    .modal-header {
+      flex-direction: column;
+    }
+    .modal-cover {
+      width: 100%;
+      height: 220px;
+    }
+  }
+.modal-stats {
+    display: flex;
+    gap: 12px;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin-bottom: 12px;   /* add this line */
+  }
+.card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  
+  .card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  }
+.star {
+    color: #facc15;   /* amber/gold yellow */
+  }

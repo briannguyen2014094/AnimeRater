@@ -21,7 +21,7 @@ async function load(p) {
         <img src="${a.image_url || ''}" alt="${a.title}">
         <div class="card-body">
             <h3>${a.title}</h3>
-            <p>Score: ${a.score} | Eps: ${a.episodes}</p>
+            <p>${a.episodes == null ? "? episodes" : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`} | <span><span class="star">★</span> ${a.score ?? "N/A"}</span></p>
         </div>
         </div>
     `).join("");
@@ -29,11 +29,33 @@ async function load(p) {
 
 window.openModal = (i) => {
     const a = animeList[i];
-    modalContent.innerHTML = `
-        <h2>${a.title}</h2>
-        <p><strong>Genres:</strong> ${a.genres.join(", ") || "None"}</p>
-        <p style="margin-top:10px; font-size:0.9rem; line-height:1.4;">${a.synopsis}</p>
-    `;
+        const episodeLabel = a.episodes == null
+      ? "? episodes"
+      : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`;
+      const genreTokens = a.genres.length
+          ? a.genres.map((g) => `<span class="chip">${g}</span>`).join("")
+          : `<span class="chip">No genres listed</span>`;
+  
+      modalContent.innerHTML = `
+          <div class="modal-header">
+              <img class="modal-cover" src="${a.image_url || ''}" alt="${a.title}">
+              <div class="modal-heading">
+                  <h2>${a.title}</h2>
+                 <div class="modal-stats">
+                    <span><span class="star">★</span> ${a.score ?? "N/A"}</span>
+                    <span>${episodeLabel}</span>
+                </div>
+                <div class="modal-genres">${genreTokens}</div>
+              </div>
+          </div>
+  
+          
+  
+          <div class="modal-synopsis">
+              <h3>Synopsis</h3>
+              <p>${a.synopsis || "No synopsis available."}</p>
+          </div>
+      `;
     modal.classList.remove("hidden");
 };
 
