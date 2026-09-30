@@ -95,6 +95,51 @@ button:disabled {
     cursor: pointer;
   }
 
+
+.search-bar {
+    display: flex;
+    align-items: center;
+    max-width: 500px;
+    margin: 0 auto 24px;
+    background-color: #1e293b;
+    border: 3px solid #334155;
+    border-radius: 999px;          /* the whole bar is the pill */
+    overflow: hidden;              /* clips children to the pill shape */
+    padding: 4px 4px 4px 0;        /* small inset so the button sits nicely */
+  }
+  
+  .search-input {
+    flex: 1;
+    padding: 10px 18px;
+    border: none;                  /* no individual border—the wrapper has it */
+    background: transparent;       /* let the wrapper's color show through */
+    color: #f8fafc;
+    font-size: 0.95rem;
+  }
+  
+  .search-input:focus {
+    outline: none;
+  }
+  
+  .search-bar:focus-within {       /* glow the whole bar when the input is focused */
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  }
+  
+   #search-btn {
+    border: 2px solid #3b82f6;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 1.1rem;      /* makes the 🔍 a bit larger and clearer */
+    flex-shrink: 0;         /* keeps the button from squishing in the flex row */
+    line-height: 1;         /* trims extra vertical space around the emoji */
+  }
+
+.search-bar button:hover {
+    transform: scale(1.05);
+    transition: transform 0.15s ease;
+  }
+
 /* Detail Modal */
 
 .modal {
@@ -201,3 +246,23 @@ button:disabled {
 .star {
     color: #facc15;   /* amber/gold yellow */
   }
+  .poster {
+    position: relative;      /* makes the poster the anchor */
+  }
+  
+  .score-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: rgba(15, 23, 42, 0.85);
+    color: #f8fafc;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #facc15;   /* add this line */
+  }
+

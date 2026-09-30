@@ -16,15 +16,18 @@ async function load(p) {
     pageNum.textContent = `Page ${page}`;
     prev.disabled = page <= 1;
 
-    grid.innerHTML = animeList.map((a, i) => `
-        <div class="card" onclick="openModal(${i})">
-        <img src="${a.image_url || ''}" alt="${a.title}">
-        <div class="card-body">
-            <h3>${a.title}</h3>
-            <p>${a.episodes == null ? "? episodes" : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`} | <span><span class="star">★</span> ${a.score ?? "N/A"}</span></p>
-        </div>
-        </div>
-    `).join("");
+     grid.innerHTML = animeList.map((a, i) => `
+      <div class="card" onclick="openModal(${i})">
+      <div class="poster">
+          <img src="${a.image_url || ''}" alt="${a.title}">
+          <span class="score-badge"><span class="star">★</span> ${a.score ?? "N/A"}</span>
+      </div>
+      <div class="card-body">
+          <h3>${a.title}</h3>
+          <p>${a.episodes == null ? "? episodes" : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`}</p>
+      </div>
+      </div>
+  `).join("");
 }
 
 window.openModal = (i) => {
