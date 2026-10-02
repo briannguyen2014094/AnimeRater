@@ -16,12 +16,19 @@
       aria-label="Search"
       autocomplete="off"
     >
+    <button id="filter-btn" type="button" aria-label="Filter ongoing anime">⚙️</button>
     <button id="search-btn" type="button" aria-label="Search">🔍</button>
+    
+
   </div>
-  
+  <div class="pagination-top">
+    <button id="prev" disabled>&larr; Prev</button>
+    <span id="page">Page 1</span>
+    <button id="next">Next &rarr;</button>
+  </div>
   <div id="grid" class="grid"></div>
   
-  <div class="pagination">
+  <div class="pagination-bottom">
     <button id="prev" disabled>&larr; Prev</button>
     <span id="page">Page 1</span>
     <button id="next">Next &rarr;</button>

@@ -17,11 +17,12 @@ async function load(p) {
     prev.disabled = page <= 1;
 
      grid.innerHTML = animeList.map((a, i) => `
-      <div class="card" onclick="openModal(${i})">
-      <div class="poster">
+        <div class="card" onclick="openModal(${i})">
+        <div class="poster">
           <img src="${a.image_url || ''}" alt="${a.title}">
           <span class="score-badge"><span class="star">★</span> ${a.score ?? "N/A"}</span>
-      </div>
+            <button class="favorite-btn" type="button" aria-label="Add to favorites" onclick="addToFavorites(event, this, ${i})">♡</button>
+        </div>
       <div class="card-body">
           <h3>${a.title}</h3>
           <p>${a.episodes == null ? "? episodes" : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`}</p>
@@ -38,7 +39,16 @@ window.openModal = (i) => {
       const genreTokens = a.genres.length
           ? a.genres.map((g) => `<span class="chip">${g}</span>`).join("")
           : `<span class="chip">No genres listed</span>`;
+    window.addToFavorites = (event, btn, i) => {
+      event.stopPropagation();
+      const isFav = btn.classList.toggle("favorited");
+      btn.textContent = isFav ? "♥" : "♡";
+      btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
   
+      const anime = animeList[i];
+  };
+
+
       modalContent.innerHTML = `
           <div class="modal-header">
               <img class="modal-cover" src="${a.image_url || ''}" alt="${a.title}">
