@@ -5,7 +5,7 @@ let animeList = [];
 const favorites = new Set(JSON.parse(localStorage.getItem("favoriteAnimeIds") || "[]"));
 
 const $ = (id) => document.getElementById(id);
-const grid = $("grid"), pageNum = $("page"), prev = $("prev"), next = $("next"), modal = $("modal"), modalContent = $("modal-content");
+const grid = $("grid"), pageNum = document.querySelectorAll(".page"), prev = document.querySelectorAll(".prev"), next = document.querySelectorAll(".next"), modal = $("modal"), modalContent = $("modal-content");
 
 async function load(p) {
     grid.innerHTML = "<p>Loading...</p>";
@@ -14,8 +14,8 @@ async function load(p) {
     
     animeList = json.data || [];
     page = p;
-    pageNum.textContent = `Page ${page}`;
-    prev.disabled = page <= 1;
+    pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
+    prev.forEach((button) => { button.disabled = page <= 1; });
 
      grid.innerHTML = animeList.map((a, i) => `
         <div class="card" onclick="openModal(${i})">
@@ -77,7 +77,8 @@ window.openModal = (i) => {
 
 $("close").onclick = () => modal.classList.add("hidden");
 modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-prev.onclick = () => page > 1 && load(page - 1);
 next.onclick = () => load(page + 1);
+prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); });
+next.forEach((button) => { button.onclick = () => load(page + 1); });
 
 load(1);
