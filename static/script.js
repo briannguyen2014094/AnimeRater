@@ -77,7 +77,6 @@ window.openModal = (i) => {
 
 $("close").onclick = () => modal.classList.add("hidden");
 modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-next.onclick = () => load(page + 1);
 prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); });
 next.forEach((button) => { button.onclick = () => load(page + 1); });
 
