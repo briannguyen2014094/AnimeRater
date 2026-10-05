@@ -1,7 +1,8 @@
-"use strict";
+﻿"use strict";
 
 let page = 1;
 let animeList = [];
+const favorites = new Set(JSON.parse(localStorage.getItem("favoriteAnimeIds") || "[]"));
 
 const $ = (id) => document.getElementById(id);
 const grid = $("grid"), pageNum = $("page"), prev = $("prev"), next = $("next"), modal = $("modal"), modalContent = $("modal-content");
@@ -21,7 +22,7 @@ async function load(p) {
         <div class="poster">
           <img src="${a.image_url || ''}" alt="${a.title}">
           <span class="score-badge"><span class="star">★</span> ${a.score ?? "N/A"}</span>
-            <button class="favorite-btn" type="button" aria-label="Add to favorites" onclick="addToFavorites(event, this, ${i})">♡</button>
+            <button class="favorite-btn${favorites.has(a.id) ? " favorited" : ""}" type="button" aria-label="${favorites.has(a.id) ? "Remove from favorites" : "Add to favorites"}" onclick="addToFavorites(event, this, ${i})">${favorites.has(a.id) ? "♥" : "♡"}</button>
         </div>
       <div class="card-body">
           <h3>${a.title}</h3>
@@ -31,6 +32,18 @@ async function load(p) {
   `).join("");
 }
 
+window.addToFavorites = (event, btn, i) => {
+    event.stopPropagation();
+    const anime = animeList[i];
+    if (favorites.has(anime.id)) favorites.delete(anime.id);
+    else favorites.add(anime.id);
+    localStorage.setItem("favoriteAnimeIds", JSON.stringify([...favorites]));
+    const isFav = favorites.has(anime.id);
+    btn.classList.toggle("favorited", isFav);
+    btn.textContent = isFav ? "♥" : "♡";
+    btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
+};
+
 window.openModal = (i) => {
     const a = animeList[i];
         const episodeLabel = a.episodes == null
@@ -39,16 +52,6 @@ window.openModal = (i) => {
       const genreTokens = a.genres.length
           ? a.genres.map((g) => `<span class="chip">${g}</span>`).join("")
           : `<span class="chip">No genres listed</span>`;
-    window.addToFavorites = (event, btn, i) => {
-      event.stopPropagation();
-      const isFav = btn.classList.toggle("favorited");
-      btn.textContent = isFav ? "♥" : "♡";
-      btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
-  
-      const anime = animeList[i];
-  };
-
-
       modalContent.innerHTML = `
           <div class="modal-header">
               <img class="modal-cover" src="${a.image_url || ''}" alt="${a.title}">
