@@ -302,18 +302,21 @@ button:disabled {
   }
 .favorite-btn {
     position: absolute;
+    /*opacity: 0.5;*/
     top: 8px;
     left: 8px;
     background-color: rgba(15, 23, 42, 0.85);
-    color: #f8fafc;
+    color: #ff0000;
     padding: 4px 8px;
+    /*border: none; 
+    background: none;*/
     border-radius: 999px;
     font-size: 1.0rem;
     font-weight: 600;
     display: flex;
     align-items: right;
     gap: 4px;
-    border: 1px solid #3b82f6;   /* add this line */
+    border: 1px solid #eaf63b;  /*  add this line */
   }
 .favorite-btn:hover {
     transform: scale(1.1);

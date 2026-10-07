@@ -30,6 +30,14 @@ async function load(p) {
       </div>
   `).join("");
 }
+window.addToFavorites = (event, btn, i) => {
+      event.stopPropagation();
+      const isFav = btn.classList.toggle("favorited");
+      btn.textContent = isFav ? "♥" : "♡";
+      btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
+  
+      const anime = animeList[i];
+  };
 
 window.openModal = (i) => {
     const a = animeList[i];
@@ -39,14 +47,7 @@ window.openModal = (i) => {
       const genreTokens = a.genres.length
           ? a.genres.map((g) => `<span class="chip">${g}</span>`).join("")
           : `<span class="chip">No genres listed</span>`;
-    window.addToFavorites = (event, btn, i) => {
-      event.stopPropagation();
-      const isFav = btn.classList.toggle("favorited");
-      btn.textContent = isFav ? "♥" : "♡";
-      btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
-  
-      const anime = animeList[i];
-  };
+    
 
 
       modalContent.innerHTML = `
