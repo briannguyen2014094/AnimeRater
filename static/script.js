@@ -1,10 +1,11 @@
-"use strict";
+﻿"use strict";
 
 let page = 1;
 let animeList = [];
+const favorites = new Set(JSON.parse(localStorage.getItem("favoriteAnimeIds") || "[]"));
 
 const $ = (id) => document.getElementById(id);
-const grid = $("grid"), pageNum = $("page"), prev = $("prev"), next = $("next"), modal = $("modal"), modalContent = $("modal-content");
+const grid = $("grid"), pageNum = document.querySelectorAll(".page"), prev = document.querySelectorAll(".prev"), next = document.querySelectorAll(".next"), modal = $("modal"), modalContent = $("modal-content");
 
 async function load(p) {
     grid.innerHTML = "<p>Loading...</p>";
@@ -13,15 +14,15 @@ async function load(p) {
     
     animeList = json.data || [];
     page = p;
-    pageNum.textContent = `Page ${page}`;
-    prev.disabled = page <= 1;
+    pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
+    prev.forEach((button) => { button.disabled = page <= 1; });
 
      grid.innerHTML = animeList.map((a, i) => `
         <div class="card" onclick="openModal(${i})">
         <div class="poster">
           <img src="${a.image_url || ''}" alt="${a.title}">
           <span class="score-badge"><span class="star">★</span> ${a.score ?? "N/A"}</span>
-            <button class="favorite-btn" type="button" aria-label="Add to favorites" onclick="addToFavorites(event, this, ${i})">♡</button>
+            <button class="favorite-btn${favorites.has(a.id) ? " favorited" : ""}" type="button" aria-label="${favorites.has(a.id) ? "Remove from favorites" : "Add to favorites"}" onclick="addToFavorites(event, this, ${i})">${favorites.has(a.id) ? "♥" : "♡"}</button>
         </div>
       <div class="card-body">
           <h3>${a.title}</h3>
@@ -38,6 +39,18 @@ window.addToFavorites = (event, btn, i) => {
   
       const anime = animeList[i];
   };
+
+window.addToFavorites = (event, btn, i) => {
+    event.stopPropagation();
+    const anime = animeList[i];
+    if (favorites.has(anime.id)) favorites.delete(anime.id);
+    else favorites.add(anime.id);
+    localStorage.setItem("favoriteAnimeIds", JSON.stringify([...favorites]));
+    const isFav = favorites.has(anime.id);
+    btn.classList.toggle("favorited", isFav);
+    btn.textContent = isFav ? "♥" : "♡";
+    btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
+};
 
 window.openModal = (i) => {
     const a = animeList[i];
@@ -75,7 +88,7 @@ window.openModal = (i) => {
 
 $("close").onclick = () => modal.classList.add("hidden");
 modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-prev.onclick = () => page > 1 && load(page - 1);
-next.onclick = () => load(page + 1);
+prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); });
+next.forEach((button) => { button.onclick = () => load(page + 1); });
 
 load(1);
