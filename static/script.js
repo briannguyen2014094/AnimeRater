@@ -77,18 +77,25 @@ function renderFavoriteCount() {
 
 function render() {
     pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
+    grid.setAttribute("aria-busy", String(loading));
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
     renderFavoriteCount();
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
     prev.forEach((button) => { button.disabled = loading || page <= 1; });
-    next.forEach((button) => { button.disabled = loading || (activeQuery && !hasMore); });
+    next.forEach((button) => { button.disabled = loading || !hasMore; });
     visibleAnime = view === "favorites"
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
         : animeList;
-    if (view === "all" && (loading || catalogError)) {
-        grid.innerHTML = loading ? "<p>Loading...</p>" : `<div class="empty-state"><p>${activeQuery ? "We couldn’t run that search." : "We couldn’t load the catalog."} Please try again.</p><button id="retry" type="button">Try again</button></div>`;
-        if (catalogError && !loading) $("retry").onclick = () => (activeQuery ? search(activeQuery, page) : load(page));
+    if (view === "all" && catalogError) {
+        grid.innerHTML = `<div class="empty-state"><p>${activeQuery ? "We couldn’t run that search." : "We couldn’t load the catalog."} Please try again.</p><button id="retry" type="button">Try again</button></div>`;
+        $("retry").onclick = () => (activeQuery ? search(activeQuery, page) : load(page));
+        return;
+    }
+    // While paging, keep the cards already on screen. Replacing them with a one-line
+    // "Loading..." message collapses the page height and reads as a full-site flash.
+    if (view === "all" && loading && !visibleAnime.length) {
+        grid.innerHTML = "<p>Loading...</p>";
         return;
     }
     if (view === "favorites" && !favorites.size) {
@@ -136,6 +143,7 @@ async function load(p) {
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
             .map(animeDetails);
         page = p;
+        hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
         let resolved = false;
         for (const anime of animeList) {
             if (favorites.has(anime.id)) {
@@ -166,9 +174,9 @@ async function search(q, p = 1) {
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
             .map(animeDetails);
         page = p;
-        // AniList sends no "is there another page" flag through this response,
-        // so a full page is the signal that it is worth trying the next one.
-        hasMore = animeList.length === PAGE_SIZE;
+        // has_next_page comes straight from AniList's pageInfo; the length check is
+        // only a fallback for a response that does not carry it
+        hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
     } catch {
         catalogError = true;
     } finally {

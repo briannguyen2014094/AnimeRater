@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from packages.catalog.anilist_client import AniListClient
+from packages.catalog.anilist_client import AniListClient, RateLimited
 
 app = FastAPI(title="AnimeRater")
 
@@ -11,6 +11,17 @@ ROOT = Path(__file__).resolve().parents[1] / "static"
 app.mount("/static", StaticFiles(directory=ROOT), name="static")
 
 anilist = AniListClient()
+
+
+def _upstream_error(exc: Exception) -> HTTPException:
+    """Rate limiting is temporary rather than a gateway fault, so it gets its own status."""
+    if isinstance(exc, RateLimited):
+        return HTTPException(
+            status_code=503,
+            detail=str(exc),
+            headers={"Retry-After": str(int(exc.retry_after))},
+        )
+    return HTTPException(status_code=502, detail=str(exc))
 
 
 @app.get("/")
@@ -21,9 +32,11 @@ def serve_home():
 @app.get("/api/catalog/top")
 def get_top_anime_page(page: int = 1, limit: int = 12):
     try:
-        return {"page": page, "data": anilist.get_top_anime(page=page, limit=limit)}
+        result = anilist.get_top_page(page=page, limit=limit)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise _upstream_error(exc)
+
+    return {"page": page, "data": result["data"], "has_next_page": result["has_next_page"]}
 
 
 @app.get("/api/catalog/search")
@@ -34,14 +47,14 @@ def search_anime(
 ):
     # A blank query is not an error; it just has nothing to search for.
     if not q.strip():
-        return {"query": q, "page": page, "data": []}
+        return {"query": q, "page": page, "data": [], "has_next_page": False}
 
     try:
-        results = anilist.search_anime(q, page=page, limit=limit)
+        result = anilist.get_search_page(q, page=page, limit=limit)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise _upstream_error(exc)
 
-    return {"query": q, "page": page, "data": results}
+    return {"query": q, "page": page, "data": result["data"], "has_next_page": result["has_next_page"]}
 
 
 @app.get("/api/catalog/anime/{anime_id}")
@@ -53,7 +66,7 @@ def get_anime_details(anime_id: int):
     try:
         details = anilist.get_anime_details(anime_id)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise _upstream_error(exc)
 
     if details is None:
         raise HTTPException(status_code=404, detail=f"No anime with AniList id {anime_id}")
