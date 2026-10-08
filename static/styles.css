@@ -18,6 +18,47 @@ h1 {
 
 /* Anime Cards */
 
+[hidden] {
+  display: none !important;
+}
+
+.view-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.view-controls button[aria-pressed="false"] {
+  background-color: #334155;
+}
+
+.view-controls button[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px #93c5fd;
+  font-weight: 700;
+}
+
+button:focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+}
+
+.empty-state, .storage-notice {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 24px;
+  color: #cbd5e1;
+}
+
+.empty-state p {
+  margin: 12px 0 20px;
+}
+
+.favorite-btn.favorited {
+  color: #f472b6;
+  border-color: #f472b6;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -283,6 +324,7 @@ button:disabled {
   }
   .poster {
     position: relative;      /* makes the poster the anchor */
+    min-height: 48px;
   }
   
   .score-badge {
