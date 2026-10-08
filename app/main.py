@@ -1,5 +1,5 @@
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -24,3 +24,21 @@ def get_top_anime_page(page: int = 1, limit: int = 12):
         return {"page": page, "data": anilist.get_top_anime(page=page, limit=limit)}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@app.get("/api/catalog/search")
+def search_anime(
+    q: str = Query("", description="Title text to search for"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=50),
+):
+    # A blank query is not an error; it just has nothing to search for.
+    if not q.strip():
+        return {"query": q, "page": page, "data": []}
+
+    try:
+        results = anilist.search_anime(q, page=page, limit=limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {"query": q, "page": page, "data": results}
