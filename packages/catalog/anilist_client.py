@@ -24,7 +24,6 @@ query GetTopAnime($page: Int, $perPage: Int) {
                 english
                 romaji
             }
-            description
             episodes
             averageScore
             coverImage {
@@ -46,7 +45,6 @@ query SearchAnime($search: String, $page: Int, $perPage: Int) {
                 english
                 romaji
             }
-            description
             episodes
             averageScore
             coverImage {
@@ -54,6 +52,26 @@ query SearchAnime($search: String, $page: Int, $perPage: Int) {
             }
             genres
         }
+    }
+}
+"""
+
+ANIME_DETAIL_QUERY = """
+query GetAnimeDetails($id: Int) {
+    Media(id: $id, type: ANIME) {
+        id
+        idMal
+        title {
+            english
+            romaji
+        }
+        description
+        episodes
+        averageScore
+        coverImage {
+            large
+        }
+        genres
     }
 }
 """
@@ -70,7 +88,7 @@ class AniListClient:
             headers=DEFAULT_HEADERS,
         )
         # ordered least-recently-used first, so eviction is a single popitem
-        self._anime_cache: OrderedDict[tuple[Any, ...], tuple[float, list[dict[str, Any]]]] = OrderedDict()
+        self._anime_cache: OrderedDict[tuple[Any, ...], tuple[float, Any]] = OrderedDict()
         # FastAPI runs these sync endpoints in a thread pool, so the cache is shared across threads
         self._cache_lock = threading.Lock()
     
@@ -92,6 +110,8 @@ class AniListClient:
         return {
             # idMal retains compatibility with MyAnimeList IDs
             "id": raw.get("idMal") or raw.get("id"),
+            # the AniList id is always present, so detail lookups key off it
+            "anilist_id": raw.get("id"),
             "title": chosen_title,
             "synopsis": self._clean_html(raw.get("description")),
             "episodes": raw.get("episodes"),
@@ -126,7 +146,7 @@ class AniListClient:
         response.raise_for_status()
         return response.json()
 
-    def _cache_get(self, key: tuple[Any, ...]) -> list[dict[str, Any]] | None:
+    def _cache_get(self, key: tuple[Any, ...]) -> Any:
         """Return a live cache entry, or None when it is missing or expired."""
         with self._cache_lock:
             entry = self._anime_cache.get(key)
@@ -141,8 +161,9 @@ class AniListClient:
             self._anime_cache.move_to_end(key)
             return value
 
-    def _cache_put(self, key: tuple[Any, ...], value: list[dict[str, Any]]) -> None:
-        # A GraphQL error and a no-match both come back as an empty list
+    def _cache_put(self, key: tuple[Any, ...], value: Any) -> None:
+        # A GraphQL error and a no-match both normalize to an empty result,
+        # so empties are never cached - a transient failure must not stick around
         if not value:
             return
 
@@ -180,6 +201,32 @@ class AniListClient:
         results = self._normalize_payload(payload, func=self.search_anime)
         self._cache_put(cache_key, results)
         return results
+
+    def get_anime_details(self, anilist_id: int) -> dict[str, Any] | None:
+        """Fetch one anime by AniList id, including the synopsis the list queries omit."""
+        cache_key = ("detail", anilist_id)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            payload = self._post(ANIME_DETAIL_QUERY, {"id": anilist_id})
+        except httpx.HTTPStatusError as exc:
+            # AniList answers 404 for an id that does not exist; that is not an outage
+            if exc.response.status_code == 404:
+                return None
+            raise
+
+        for err in payload.get("errors") or []:
+            print(f"[WARNING] AniList GraphQL Error: {err.get('message')}")
+
+        media = (payload.get("data") or {}).get("Media")
+        if not media:
+            return None
+
+        details = self._normalize_anime(media)
+        self._cache_put(cache_key, details)
+        return details
     
 if __name__ == "__main__":
     # debugging
@@ -217,3 +264,9 @@ if __name__ == "__main__":
     cache_client.get_top_anime(page=1, limit=5)
     cache_client.get_top_anime(page=1, limit=5)
     print(f"two identical calls sent {len(fetches)} request(s)")
+
+    print("---detail test---")
+    details = client.get_anime_details(154587)   # Frieren, by AniList id
+    if details:
+        print(f"[{details['id']}] {details['title']} | anilist_id={details['anilist_id']} "
+              f"| synopsis {len(details['synopsis'] or '')} chars")
