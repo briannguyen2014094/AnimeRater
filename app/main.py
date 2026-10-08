@@ -42,3 +42,20 @@ def search_anime(
         raise HTTPException(status_code=502, detail=str(exc))
 
     return {"query": q, "page": page, "data": results}
+
+
+@app.get("/api/catalog/anime/{anime_id}")
+def get_anime_details(anime_id: int):
+    """One anime in full, including the synopsis the list endpoints leave out.
+
+    anime_id is the AniList id, which the list payloads expose as anilist_id.
+    """
+    try:
+        details = anilist.get_anime_details(anime_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    if details is None:
+        raise HTTPException(status_code=404, detail=f"No anime with AniList id {anime_id}")
+
+    return details
