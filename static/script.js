@@ -6,6 +6,7 @@ let visibleAnime = [];
 let view = "all";
 let loading = false;
 let catalogError = false;
+let errorMessage = "";
 let activeQuery = "";
 let hasMore = true;
 const PAGE_SIZE = 25;
@@ -71,6 +72,25 @@ function scrollToTop() {
     window.scrollTo(0, 0);
 }
 
+// The API distinguishes a temporary throttle (503 + Retry-After) from a real
+// upstream fault (502), so say which one happened instead of a generic failure.
+async function describeFailure(res) {
+    try {
+        const body = await res.json();
+        if (res.status === 503) {
+            const retry = res.headers.get("retry-after");
+            return retry
+                ? `AniList is rate limiting requests right now. Try again in about ${retry} seconds.`
+                : "AniList is rate limiting requests right now. Try again in a moment.";
+        }
+        return typeof body.detail === "string" && body.detail
+            ? body.detail
+            : "Something went wrong talking to AniList.";
+    } catch {
+        return "Something went wrong talking to AniList.";
+    }
+}
+
 function renderFavoriteCount() {
     $("favorites").textContent = `Favorites (${favorites.size})`;
 }
@@ -88,7 +108,8 @@ function render() {
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
         : animeList;
     if (view === "all" && catalogError) {
-        grid.innerHTML = `<div class="empty-state"><p>${activeQuery ? "We couldn’t run that search." : "We couldn’t load the catalog."} Please try again.</p><button id="retry" type="button">Try again</button></div>`;
+        const fallback = activeQuery ? "We couldn’t run that search. Please try again." : "We couldn’t load the catalog. Please try again.";
+        grid.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage || fallback)}</p><button id="retry" type="button">Try again</button></div>`;
         $("retry").onclick = () => (activeQuery ? search(activeQuery, page) : load(page));
         return;
     }
@@ -132,12 +153,16 @@ function render() {
 async function load(p) {
     loading = true;
     catalogError = false;
+    errorMessage = "";
     // only on an actual page change, so a refresh keeps the position the browser restored
     if (p !== page) scrollToTop();
     render();
     try {
         const res = await fetch(`/api/catalog/top?page=${p}&limit=${PAGE_SIZE}`);
-        if (!res.ok) throw new Error("Catalog unavailable");
+        if (!res.ok) {
+            errorMessage = await describeFailure(res);
+            throw new Error(errorMessage);
+        }
         const json = await res.json();
         animeList = (Array.isArray(json.data) ? json.data : [])
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
@@ -153,6 +178,7 @@ async function load(p) {
         }
         if (resolved) saveFavorites();
     } catch {
+        // a network failure has no server message, so the friendly fallback stands
         catalogError = true;
     } finally {
         loading = false;
@@ -164,11 +190,15 @@ async function search(q, p = 1) {
     activeQuery = q;
     loading = true;
     catalogError = false;
+    errorMessage = "";
     scrollToTop();
     render();
     try {
         const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=${p}&limit=${PAGE_SIZE}`);
-        if (!res.ok) throw new Error("Search unavailable");
+        if (!res.ok) {
+            errorMessage = await describeFailure(res);
+            throw new Error(errorMessage);
+        }
         const json = await res.json();
         animeList = (Array.isArray(json.data) ? json.data : [])
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
@@ -178,6 +208,7 @@ async function search(q, p = 1) {
         // only a fallback for a response that does not carry it
         hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
     } catch {
+        // a network failure has no server message, so the friendly fallback stands
         catalogError = true;
     } finally {
         loading = false;
