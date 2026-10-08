@@ -65,6 +65,10 @@ function saveFavorites() {
     }
 }
 
+function scrollToTop() {
+    window.scrollTo(0, 0);
+}
+
 function render() {
     pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
@@ -114,6 +118,8 @@ function render() {
 async function load(p) {
     loading = true;
     catalogError = false;
+    // only on an actual page change, so a refresh keeps the position the browser restored
+    if (p !== page) scrollToTop();
     render();
     try {
         const res = await fetch(`/api/catalog/top?page=${p}&limit=${PAGE_SIZE}`);
@@ -143,6 +149,7 @@ async function search(q, p = 1) {
     activeQuery = q;
     loading = true;
     catalogError = false;
+    scrollToTop();
     render();
     try {
         const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=${p}&limit=${PAGE_SIZE}`);
