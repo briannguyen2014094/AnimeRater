@@ -31,14 +31,6 @@ async function load(p) {
       </div>
   `).join("");
 }
-window.addToFavorites = (event, btn, i) => {
-      event.stopPropagation();
-      const isFav = btn.classList.toggle("favorited");
-      btn.textContent = isFav ? "♥" : "♡";
-      btn.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
-  
-      const anime = animeList[i];
-  };
 
 window.addToFavorites = (event, btn, i) => {
     event.stopPropagation();
