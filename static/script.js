@@ -69,10 +69,15 @@ function scrollToTop() {
     window.scrollTo(0, 0);
 }
 
+function renderFavoriteCount() {
+    $("favorites").textContent = `Favorites (${favorites.size})`;
+}
+
 function render() {
     pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
+    renderFavoriteCount();
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
     prev.forEach((button) => { button.disabled = loading || page <= 1; });
     next.forEach((button) => { button.disabled = loading || (activeQuery && !hasMore); });
@@ -196,6 +201,7 @@ window.addToFavorites = (event, btn, i) => {
         favoriteDetails.set(anime.id, animeDetails(anime));
     }
     saveFavorites();
+    renderFavoriteCount();
     if (view === "favorites") {
         render();
         const buttons = grid.querySelectorAll(".favorite-btn");
