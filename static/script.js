@@ -35,6 +35,8 @@ function readStoredArray(key) {
 function animeDetails(anime) {
     return {
         id: Number(anime.id),
+        // the AniList id, used to fetch the synopsis the list payloads leave out
+        anilist_id: Number.isSafeInteger(Number(anime.anilist_id)) && Number(anime.anilist_id) > 0 ? Number(anime.anilist_id) : null,
         title: anime.title,
         image_url: typeof anime.image_url === "string" ? anime.image_url : "",
         score: Number.isFinite(anime.score) ? anime.score : null,
@@ -215,12 +217,46 @@ window.addToFavorites = (event, btn, i) => {
     }
 };
 
+let synopsisToken = 0;
+
+function setSynopsisText(token, text) {
+    if (token !== synopsisToken) return;
+    const slot = $("modal-synopsis-text");
+    if (slot) slot.textContent = text;
+}
+
+async function loadSynopsis(a) {
+    if (a.synopsis) return;
+
+    const token = ++synopsisToken;
+
+    if (!a.anilist_id) {
+        setSynopsisText(token, a.unresolved
+            ? "Details for this older favorite will be restored when you visit its catalog page."
+            : "No synopsis available.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/catalog/anime/${a.anilist_id}`);
+        if (!res.ok) throw new Error("Details unavailable");
+        const json = await res.json();
+        a.synopsis = typeof json.synopsis === "string" ? json.synopsis : "";
+        setSynopsisText(token, a.synopsis || "No synopsis available.");
+    } catch {
+        setSynopsisText(token, "We couldn't load the synopsis. Please try again.");
+    }
+}
+
 window.openModal = (i) => {
     const a = visibleAnime[i];
     const genres = a.genres || [];
     const genreTokens = genres.length
         ? genres.map((g) => `<span class="chip">${escapeHtml(g)}</span>`).join("")
         : '<span class="chip">No genres listed</span>';
+    const pendingSynopsis = a.unresolved
+        ? "Details for this older favorite will be restored when you visit its catalog page."
+        : "Loading synopsis…";
     modalContent.innerHTML = `
         <div class="modal-header">
             ${a.image_url ? `<img class="modal-cover" src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.title)}">` : ""}
@@ -235,10 +271,11 @@ window.openModal = (i) => {
         </div>
         <div class="modal-synopsis">
             <h3>Synopsis</h3>
-            <p>${escapeHtml(a.unresolved ? "Details for this older favorite will be restored when you visit its catalog page." : a.synopsis || "No synopsis available.")}</p>
+            <p id="modal-synopsis-text">${escapeHtml(a.synopsis || pendingSynopsis)}</p>
         </div>
     `;
     modal.classList.remove("hidden");
+    loadSynopsis(a);
 };
 
 $("close").onclick = () => modal.classList.add("hidden");
