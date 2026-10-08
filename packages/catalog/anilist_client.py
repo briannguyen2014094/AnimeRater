@@ -32,6 +32,28 @@ query GetTopAnime($page: Int, $perPage: Int) {
 }
 """
 
+SEARCH_ANIME_QUERY = """
+query SearchAnime($search: String, $page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+        media(type: ANIME, search: $search, sort: SEARCH_MATCH) {
+            id
+            idMal
+            title {
+                english
+                romaji
+            }
+            description
+            episodes
+            averageScore
+            coverImage {
+                large
+            }
+            genres
+        }
+    }
+}
+"""
+
 
 class AniListClient:
     def __init__(self):
@@ -97,6 +119,15 @@ class AniListClient:
         variables = {"page": page, "perPage": limit}
         payload = self._post(TOP_ANIME_QUERY, variables)
         return self._normalize_payload(payload, func=self.get_top_anime)
+
+    def search_anime(self, query: str, page: int = 1, limit: int = 15) -> list[dict[str, Any]]:
+        """Search AniList by title. Returns [] for a blank query or when nothing matches."""
+        if not query or not query.strip():
+            return []
+
+        variables = {"search": query.strip(), "page": page, "perPage": limit}
+        payload = self._post(SEARCH_ANIME_QUERY, variables)
+        return self._normalize_payload(payload, func=self.search_anime)
     
 if __name__ == "__main__":
     # debugging
@@ -107,4 +138,8 @@ if __name__ == "__main__":
     # anime dict keys -> dict_keys(['id', 'title', 'synopsis', 'episodes', 'score', 'image_url', 'genres'])
     for anime in top_anime:
         print(f"[{anime['id']}] {anime['title']} | Score: {anime['score']} | Episodes: {anime['episodes']}")
-                
+
+    print("---search anime test---")
+    search_results = client.search_anime("cowboy bebop", page=1)
+    for anime in search_results:
+        print(f"[{anime['id']}] {anime['title']} | Score: {anime['score']} | Episodes: {anime['episodes']}")
