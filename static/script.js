@@ -99,7 +99,7 @@ function render() {
     grid.innerHTML = visibleAnime.map((a, i) => `
         <div class="card" onclick="openModal(${i})">
           <div class="poster">
-            ${a.image_url ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.title)}">` : ""}
+            ${a.image_url ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.title)}" loading="lazy">` : ""}
             <span class="score-badge"><span class="star">★</span> ${escapeHtml(a.score ?? "N/A")}</span>
             <button class="favorite-btn${favorites.has(a.id) ? " favorited" : ""}" type="button" aria-pressed="${favorites.has(a.id)}" aria-label="${favorites.has(a.id) ? "Remove from favorites" : "Add to favorites"}" onclick="addToFavorites(event, this, ${i})">${favorites.has(a.id) ? "♥" : "♡"}</button>
           </div>
