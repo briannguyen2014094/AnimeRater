@@ -6,6 +6,7 @@ let visibleAnime = [];
 let view = "all";
 let loading = false;
 let catalogError = false;
+let activeQuery = "";
 const favorites = new Set();
 const favoriteDetails = new Map();
 
@@ -63,7 +64,7 @@ function saveFavorites() {
 }
 
 function render() {
-    pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
+    pagination.forEach((controls) => { controls.hidden = view === "favorites" || Boolean(activeQuery); });
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
@@ -73,13 +74,18 @@ function render() {
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
         : animeList;
     if (view === "all" && (loading || catalogError)) {
-        grid.innerHTML = loading ? "<p>Loading...</p>" : '<div class="empty-state"><p>We couldn’t load the catalog. Please try again.</p><button id="retry" type="button">Try again</button></div>';
-        if (catalogError && !loading) $("retry").onclick = () => load(page);
+        grid.innerHTML = loading ? "<p>Loading...</p>" : `<div class="empty-state"><p>${activeQuery ? "We couldn’t run that search." : "We couldn’t load the catalog."} Please try again.</p><button id="retry" type="button">Try again</button></div>`;
+        if (catalogError && !loading) $("retry").onclick = () => (activeQuery ? search(activeQuery) : load(page));
         return;
     }
     if (view === "favorites" && !favorites.size) {
         grid.innerHTML = '<div class="empty-state"><h2>No favorites yet</h2><p>Save anime with the heart button to find them here.</p><button id="browse-anime" type="button">Browse anime</button></div>';
         $("browse-anime").onclick = () => { setView("all"); $("all-anime").focus(); };
+        return;
+    }
+    if (view === "all" && activeQuery && !visibleAnime.length) {
+        grid.innerHTML = '<div class="empty-state"><h2>No results</h2><p>Nothing matched that search. Try a different title.</p><button id="clear-search" type="button">Clear search</button></div>';
+        $("clear-search").onclick = () => { $("search").value = ""; activeQuery = ""; load(1); };
         return;
     }
     grid.innerHTML = visibleAnime.map((a, i) => `
@@ -125,8 +131,35 @@ async function load(p) {
     }
 }
 
+async function search(q) {
+    activeQuery = q;
+    loading = true;
+    catalogError = false;
+    render();
+    try {
+        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=1&limit=25`);
+        if (!res.ok) throw new Error("Search unavailable");
+        const json = await res.json();
+        animeList = (Array.isArray(json.data) ? json.data : [])
+            .filter((a) => a && validId(a.id) && typeof a.title === "string")
+            .map(animeDetails);
+        page = 1;
+    } catch {
+        catalogError = true;
+    } finally {
+        loading = false;
+        render();
+    }
+}
+
 function setView(selectedView) {
     view = selectedView;
+    if (selectedView === "all" && activeQuery) {
+        // "All Anime" means the catalog, so leave search mode behind
+        activeQuery = "";
+        load(1);
+        return;
+    }
     render();
 }
 
@@ -190,5 +223,21 @@ prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); })
 next.forEach((button) => { button.onclick = () => load(page + 1); });
 $("all-anime").onclick = () => setView("all");
 $("favorites").onclick = () => setView("favorites");
+
+function runSearch() {
+    const q = $("search").value.trim();
+    if (!q) {
+        // an empty box means "show me the catalog", not "search for nothing"
+        activeQuery = "";
+        load(1);
+        return;
+    }
+    search(q);
+}
+
+$("search-btn").onclick = runSearch;
+$("search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") runSearch();
+});
 
 load(1);
