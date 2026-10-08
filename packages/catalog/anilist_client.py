@@ -40,7 +40,7 @@ def _retry_after_seconds(header: str | None) -> float:
 TOP_ANIME_QUERY = """
 query GetTopAnime($page: Int, $perPage: Int) {
     Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, sort: SCORE_DESC) {
+        media(type: ANIME, sort: SCORE_DESC, isAdult: false) {
             id
             idMal
             title {
@@ -64,7 +64,7 @@ query GetTopAnime($page: Int, $perPage: Int) {
 SEARCH_ANIME_QUERY = """
 query SearchAnime($search: String, $page: Int, $perPage: Int) {
     Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, search: $search, sort: SEARCH_MATCH) {
+        media(type: ANIME, search: $search, sort: SEARCH_MATCH, isAdult: false) {
             id
             idMal
             title {
@@ -90,6 +90,7 @@ query GetAnimeDetails($id: Int) {
     Media(id: $id, type: ANIME) {
         id
         idMal
+        isAdult
         title {
             english
             romaji
@@ -324,7 +325,7 @@ class AniListClient:
             print(f"[WARNING] AniList GraphQL Error: {err.get('message')}")
 
         media = (payload.get("data") or {}).get("Media")
-        if not media:
+        if not media or media.get("isAdult"):
             return None
 
         details = self._normalize_anime(media)
