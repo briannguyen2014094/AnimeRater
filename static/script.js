@@ -7,6 +7,8 @@ let view = "all";
 let loading = false;
 let catalogError = false;
 let activeQuery = "";
+let hasMore = true;
+const PAGE_SIZE = 25;
 const favorites = new Set();
 const favoriteDetails = new Map();
 
@@ -64,18 +66,18 @@ function saveFavorites() {
 }
 
 function render() {
-    pagination.forEach((controls) => { controls.hidden = view === "favorites" || Boolean(activeQuery); });
+    pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
     prev.forEach((button) => { button.disabled = loading || page <= 1; });
-    next.forEach((button) => { button.disabled = loading; });
+    next.forEach((button) => { button.disabled = loading || (activeQuery && !hasMore); });
     visibleAnime = view === "favorites"
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
         : animeList;
     if (view === "all" && (loading || catalogError)) {
         grid.innerHTML = loading ? "<p>Loading...</p>" : `<div class="empty-state"><p>${activeQuery ? "We couldn’t run that search." : "We couldn’t load the catalog."} Please try again.</p><button id="retry" type="button">Try again</button></div>`;
-        if (catalogError && !loading) $("retry").onclick = () => (activeQuery ? search(activeQuery) : load(page));
+        if (catalogError && !loading) $("retry").onclick = () => (activeQuery ? search(activeQuery, page) : load(page));
         return;
     }
     if (view === "favorites" && !favorites.size) {
@@ -84,8 +86,14 @@ function render() {
         return;
     }
     if (view === "all" && activeQuery && !visibleAnime.length) {
-        grid.innerHTML = '<div class="empty-state"><h2>No results</h2><p>Nothing matched that search. Try a different title.</p><button id="clear-search" type="button">Clear search</button></div>';
-        $("clear-search").onclick = () => { $("search").value = ""; activeQuery = ""; load(1); };
+        // nothing on page 1 means the query found nothing
+        if (page > 1) {
+            grid.innerHTML = '<div class="empty-state"><h2>No more results</h2><p>That was the last page for this search.</p><button id="search-back" type="button">Previous page</button></div>';
+            $("search-back").onclick = () => search(activeQuery, page - 1);
+        } else {
+            grid.innerHTML = '<div class="empty-state"><h2>No results</h2><p>Nothing matched that search. Try a different title.</p><button id="clear-search" type="button">Clear search</button></div>';
+            $("clear-search").onclick = () => { $("search").value = ""; activeQuery = ""; load(1); };
+        }
         return;
     }
     grid.innerHTML = visibleAnime.map((a, i) => `
@@ -108,7 +116,7 @@ async function load(p) {
     catalogError = false;
     render();
     try {
-        const res = await fetch(`/api/catalog/top?page=${p}&limit=25`);
+        const res = await fetch(`/api/catalog/top?page=${p}&limit=${PAGE_SIZE}`);
         if (!res.ok) throw new Error("Catalog unavailable");
         const json = await res.json();
         animeList = (Array.isArray(json.data) ? json.data : [])
@@ -131,19 +139,22 @@ async function load(p) {
     }
 }
 
-async function search(q) {
+async function search(q, p = 1) {
     activeQuery = q;
     loading = true;
     catalogError = false;
     render();
     try {
-        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=1&limit=25`);
+        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=${p}&limit=${PAGE_SIZE}`);
         if (!res.ok) throw new Error("Search unavailable");
         const json = await res.json();
         animeList = (Array.isArray(json.data) ? json.data : [])
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
             .map(animeDetails);
-        page = 1;
+        page = p;
+        // AniList sends no "is there another page" flag through this response,
+        // so a full page is the signal that it is worth trying the next one.
+        hasMore = animeList.length === PAGE_SIZE;
     } catch {
         catalogError = true;
     } finally {
@@ -219,8 +230,8 @@ window.openModal = (i) => {
 
 $("close").onclick = () => modal.classList.add("hidden");
 modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); });
-next.forEach((button) => { button.onclick = () => load(page + 1); });
+prev.forEach((button) => { button.onclick = () => page > 1 && (activeQuery ? search(activeQuery, page - 1) : load(page - 1)); });
+next.forEach((button) => { button.onclick = () => (activeQuery ? search(activeQuery, page + 1) : load(page + 1)); });
 $("all-anime").onclick = () => setView("all");
 $("favorites").onclick = () => setView("favorites");
 
