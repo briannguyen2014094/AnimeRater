@@ -230,6 +230,9 @@ window.openModal = (i) => {
 
 $("close").onclick = () => modal.classList.add("hidden");
 modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.classList.contains("hidden")) modal.classList.add("hidden");
+});
 prev.forEach((button) => { button.onclick = () => page > 1 && (activeQuery ? search(activeQuery, page - 1) : load(page - 1)); });
 next.forEach((button) => { button.onclick = () => (activeQuery ? search(activeQuery, page + 1) : load(page + 1)); });
 $("all-anime").onclick = () => setView("all");
