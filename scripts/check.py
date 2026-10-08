@@ -55,7 +55,11 @@ def main():
         url = urlsplit(reference)
         if url.scheme or url.netloc:
             continue
-        path = (ROOT / unquote(url.path).lstrip("/")).resolve()
+        asset_path = unquote(url.path).lstrip("/")
+        # FastAPI serves the static directory at /static (and relative static/).
+        if asset_path.startswith("static/"):
+            asset_path = asset_path[len("static/"):]
+        path = (ROOT / asset_path).resolve()
         if not path.is_relative_to(ROOT) or not path.is_file():
             errors.append(f"Missing or invalid local asset: {reference!r}")
 

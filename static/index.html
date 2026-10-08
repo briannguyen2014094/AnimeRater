@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>AnimeRater - Browse Top Anime</title>
-  <link rel="stylesheet" href="static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <h1>AnimeRater</h1>
@@ -21,6 +21,11 @@
     
 
   </div>
+  <div class="view-controls" role="group" aria-label="Anime view">
+    <button id="all-anime" type="button" aria-pressed="true" aria-controls="grid">All Anime</button>
+    <button id="favorites" type="button" aria-pressed="false" aria-controls="grid">Favorites</button>
+  </div>
+  <p id="storage-notice" class="storage-notice" role="status" hidden></p>
   <div class="pagination-top">
     <button class="prev" disabled>&larr; Prev</button>
     <span class="page">Page 1</span>
@@ -41,6 +46,6 @@
     </div>
   </div>
 
-  <script src="static/script.js"></script>
+  <script src="/static/script.js"></script>
 </body>
 </html>

@@ -39,6 +39,22 @@ Press Ctrl+C in the terminal to stop the site. If port 8000 is already in use,
 replace `8000` with `8001` in both the command and the browser address.
 This server command is only for testing the site on your own computer.
 
+## Favorites
+
+Use the heart on any anime card to save or remove a favorite. **All Anime**
+keeps the paginated catalog; **Favorites** shows saved anime from every page,
+without pagination. Click a saved card to open its synopsis. When the list is
+empty, **Browse anime** returns to the catalog. The view buttons support Tab
+and Enter/Space and highlight the selected view.
+
+Favorites are stored in this browser's localStorage, including the title,
+image URL, score, episode count, genres, and synopsis, so they survive a
+refresh. Older `favoriteAnimeIds` are preserved: visiting their catalog page
+saves their details. Until then, Favorites shows a placeholder for each
+unresolved ID, which can also be removed. Invalid stored entries are ignored;
+if browser storage is unavailable, a message explains that changes may not
+survive a refresh. Favorites are local to this browser and are not synced.
+
 ## Check the files
 
 Run this command from the AnimeRater folder:
