@@ -1,5 +1,6 @@
 # AnimeRater
 
+DEMO: <http://129.153.76.218/>
 A starter website for rating anime, made with HTML, CSS, JavaScript, and a
 Python FastAPI backend. Rating features are not available yet. You do not
 need to build the site.
