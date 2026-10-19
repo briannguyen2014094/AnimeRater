@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 let page = 1;
 let animeList = [];
@@ -344,3 +344,38 @@ $("search").addEventListener("keydown", (event) => {
 });
 
 load(1);
+const BG_THEMES = ["navy", "aurora", "sunset", "forest"]
+const settingsModal = $("settings-modal");
+
+function applyTheme(theme) {
+    const chosen = BG_THEMES.includes(theme) ? theme : "navy";
+    document.body.dataset.theme = chosen;
+    document.querySelectorAll(".bg-option").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(btn.dataset.bg === chosen));
+    });
+}
+
+function saveTheme(theme) {
+    try {
+        localStorage.setItem("bgTheme", theme);
+    } catch {
+        storageNotice("Your settings are active for this visist, but couldn't be saved. Changes may not be saved after refreshing");
+    }
+}
+
+let storedTheme = "navy";
+try { storedTheme = localStorage.getItem("bgTheme") || "navy"; } catch {}
+applyTheme(storedTheme);
+
+$("settings-btn").onclick = () => settingsModal.classList.remove("hidden");
+$("settings-close"). onclick = () => settingsModal.classList.add("hidden");
+settingsModal.onclick = (e) => { if (e.target === settingsModal)
+settingsModal.classList.add("hidden"); };
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !settingsModal.classList.contains("hidden")) {
+        settingsModal.classList.add("hidden")
+    }
+});
+document.querySelectorAll(".bg-option").forEach((btn) => {
+      btn.onclick = () => { applyTheme(btn.dataset.bg); saveTheme(btn.dataset.bg); };
+});

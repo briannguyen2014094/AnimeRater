@@ -7,6 +7,27 @@
 </head>
 <body>
   <h1>AnimeRater</h1>
+  <div class = "top-bar">
+    <button id="settings-btn" type="button" aria-haspopup="dialog" aria-label="Settings">⚙️
+    Customize</button>
+  </div>
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true"
+  aria-labelledby="settings-title">
+    <div class="modal-box">
+      <button id="settings-close" aria-label="Close settings">&times;</button>
+      <h2 id="settings-title">Settings</h2>
+  
+      <fieldset class="settings-group">
+        <legend>Background</legend>
+        <div class="bg-options" role="radiogroup" aria-label="Background theme">
+          <button class="bg-option" type="button" data-bg="navy"    aria-pressed="true">Navy</button>
+          <button class="bg-option" type="button" data-bg="aurora"  aria-pressed="false">Aurora</button>
+          <button class="bg-option" type="button" data-bg="sunset"  aria-pressed="false">Sunset</button>
+          <button class="bg-option" type="button" data-bg="forest"  aria-pressed="false">Forest</button>
+        </div>
+      </fieldset>
+    </div>
+  </div>
   <div class="search-bar">
     <input
       type="search"
@@ -16,7 +37,7 @@
       aria-label="Search"
       autocomplete="off"
     >
-    <button id="filter-btn" type="button" aria-label="Filter ongoing anime">⚙️</button>
+    <button id="filter-btn" type="button" aria-label="Filter ongoing anime">Filter</button>
     <button id="search-btn" type="button" aria-label="Search">🔍</button>
     
 

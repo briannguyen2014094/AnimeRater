@@ -5,15 +5,68 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background-color: #0f172a; /* Deep Slate Navy */
-  color: #f8fafc;            /* Crisp Off-White */
-  padding: 24px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #0f172a; /* fallback */
+    color: #f8fafc;
+    padding: 24px;
+    /* added for themes */
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+body[data-theme="navy"]{
+  background-image:
+  radial-gradient(900px circle at 15% 0%, rgba(59, 130, 246, 0.25), transparent 45%),
+  linear-gradient(180deg, #0f172a 0%, #0b1120 100%);
 }
-
+body[data-theme="aurora"]
+{
+  background-image:
+  radial-gradient(800px circle at 20% 10%, rgba(34, 197, 94, 0.22), transparent 45%),
+  radial-gradient(800px circle at 80% 15%, rgba(59, 130, 246, 0.22), transparent 45%),
+  linear-gradient(180deg, #0f172a 0%, #0b1120 100%);
+}
+body[data-theme="sunset"]
+{
+  background-image:
+  radial-gradient(900px circle at 85% 0%, rgba(244, 114, 182, 0.25), transparent 45%),
+  radial-gradient(900px circle at 10% 20%, rgba(251, 146, 60, 0.22), transparent 45%),
+  linear-gradient(180deg, #1a1025 0%, #0b1120 100%);
+}
+body[data-theme="forest"]
+{
+  background-image:
+  radial-gradient(900px circle at 50% 0%, rgba(16, 185, 129, 0.18), transparent 50%),
+  linear-gradient(180deg, #0d1f1a 0%, #0b1120 100%);
+}
 h1 {
   text-align: center;
   margin-bottom: 24px;
+}
+.top-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto 16px;
+}
+#settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+#settings-btn:hover {
+  background-color: #334155;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* Anime Cards */
