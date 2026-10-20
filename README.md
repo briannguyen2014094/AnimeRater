@@ -1,122 +1,115 @@
 # AnimeRater
 
-DEMO: <http://129.153.76.218/>
-A starter website for rating anime, made with HTML, CSS, JavaScript, and a
-Python FastAPI backend. Rating features are not available yet. You do not
-need to build the site.
+A web app for browsing anime, built with FastAPI, SQLite, and plain HTML, CSS,
+and JavaScript. Anime data comes from AniList.
 
-## Run the site on your computer
+[Demo](http://129.153.76.218/)
 
-You need Python 3.10 or newer. Open a terminal in the AnimeRater folder.
-Create a virtual environment and install the dependencies, including Uvicorn
-to run the FastAPI app.
+## Current features
 
-On Windows (PowerShell):
+- Browse and search anime, and view details.
+- Save favorites in the browser.
+- Create accounts and manage login sessions through the API.
+
+Login and signup forms, account-based favorites, and ratings are not built yet.
+
+## Requirements
+
+- Python 3.10 or newer.
+- Internet access to load anime from AniList. No API key is needed.
+
+SQLite is included with Python. No separate database server is needed.
+
+## Getting started
+
+Open a terminal in the AnimeRater folder and follow the steps for your system.
+
+### Windows (PowerShell)
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt uvicorn
+$env:SESSION_COOKIE_SECURE = "false"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+### macOS or Linux
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt uvicorn
+SESSION_COOKIE_SECURE=false .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open <http://127.0.0.1:8000>. Press Ctrl+C to stop the server.
+
+For later runs, skip the first two commands. In a new PowerShell terminal,
+set `SESSION_COOKIE_SECURE` again before starting the server.
+If port 8000 is busy, change it to 8001 in the command and browser address.
+
+## Configuration
+
+| Setting | Default | Use |
+| --- | --- | --- |
+| `SESSION_COOKIE_SECURE` | `true` | Requires HTTPS for login cookies. Set to `false` only for local HTTP use. |
+
+Set this variable in your terminal or hosting settings. The app does not load
+`.env` files automatically.
+
+The app creates `data/animerater.db` on startup. This file stores users, sessions,
+and the favorites table. It is ignored by Git, so each developer has their own
+local database. The website still saves favorites in the browser.
+
+## Testing
+
+Run these commands with the virtual environment's Python.
+
+On Windows:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 On macOS or Linux:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt uvicorn
-.venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+.venv/bin/python scripts/check.py
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-Open <http://127.0.0.1:8000> in your browser. After editing a file, refresh the
-page to see your changes.
+The first command checks page files and links, plus JavaScript syntax if Node.js
+is installed. The second tests the login API using a temporary database.
 
-Keep the terminal running while using the site. On subsequent runs, use only
-the Uvicorn command for your operating system. Internet access is needed to
-fetch anime from AniList; no API key or database setup is required for the
-current catalog page. Use the FastAPI app rather than `python -m http.server`,
-which does not provide the catalog API.
+## Project structure
 
-Press Ctrl+C in the terminal to stop the site. If port 8000 is already in use,
-replace `8000` with `8001` in both the command and the browser address.
-This server command is only for testing the site on your own computer.
+| Folder | Purpose |
+| --- | --- |
+| `app/` | FastAPI setup and SQLite helpers. |
+| `packages/auth/` | Account and login API code. |
+| `packages/catalog/` | AniList API client. |
+| `packages/search/`, `packages/reviews/` | Placeholders for future work. |
+| `static/` | Frontend HTML, CSS, and JavaScript. |
+| `scripts/` | Project checks. |
+| `tests/` | Automated tests. |
+| `data/` | Local database, created on startup and ignored by Git. |
 
-## SQLite database
+## API reference
 
-The backend uses Python's built-in `sqlite3` module. Starting FastAPI creates
-`data/animerater.db` automatically, including any missing tables. To create it
-without starting the server, run:
+With the server running, open <http://127.0.0.1:8000/docs> to view the API routes
+and request formats. Authentication POST requests require the header
+`X-Requested-With: AnimeRater`.
 
-```sh
-python -m app.database
-```
+## Deployment
 
-The initial tables are:
+- Serve the site over HTTPS.
+- Leave `SESSION_COOKIE_SECURE` unset or set it to `true`.
+- Give the server write access to `data/`, keep it between deployments, and back it up.
+- Run a single app instance with SQLite on local, persistent storage.
+- Use a production server setup without `--reload`.
 
-- `users`: unique username (case-insensitive), password hash, and creation time.
-- `sessions`: session token hash, user ID, and expiration as Unix seconds.
-- `favorites`: user ID and AniList anime ID, with no duplicate pairs.
-
-Foreign keys link sessions and favorites to users. Deleting a user also deletes
-their sessions and favorites. Creation timestamps use UTC. Store password and
-session token hashes, never raw passwords or session tokens.
-
-`app/database.py` provides `initialize_database()` and `get_connection()`.
-Use the connection helper in a `with` block; it commits on success, rolls back
-on errors, and closes the connection. Pass SQL values separately using `?`
-placeholders rather than inserting user input into SQL strings.
-
-The database is local and ignored by Git; each developer gets their own file.
-Keep the deployed database on persistent local storage outside the public
-`static/` folder. Table setup preserves existing records; future changes to
-existing table definitions will need explicit SQL migration steps.
-
-This is only the database foundation. Signup, login, and server-side favorites
-are not connected yet; favorites still use browser localStorage.
-
-## Favorites
-
-Use the heart on any anime card to save or remove a favorite. **All Anime**
-keeps the paginated catalog; **Favorites** shows saved anime from every page,
-without pagination. Click a saved card to open its synopsis. When the list is
-empty, **Browse anime** returns to the catalog. The view buttons support Tab
-and Enter/Space and highlight the selected view.
-
-Favorites are stored in this browser's localStorage, including the title,
-image URL, score, episode count, genres, and synopsis, so they survive a
-refresh. Older `favoriteAnimeIds` are preserved: visiting their catalog page
-saves their details. Until then, Favorites shows a placeholder for each
-unresolved ID, which can also be removed. Invalid stored entries are ignored;
-if browser storage is unavailable, a message explains that changes may not
-survive a refresh. Favorites are local to this browser and are not synced.
-
-## Check the files
-
-Run this command from the AnimeRater folder:
-
-```sh
-python scripts/check.py
-```
-
-This checks that the required files exist, the page has a language and title,
-and links to local JavaScript and CSS files point to files inside the project.
-If Node.js is installed, it also checks for JavaScript syntax errors. Otherwise,
-it tells you that this check was skipped. No extra packages are needed.
-
-After changing how the page looks or works, also test it in your browser:
-
-- Look for errors in the browser's developer console.
-- Make sure you can use the page with a keyboard.
-- Check that the page fits a narrow window, such as a phone screen.
-
-The check command does not test page styles, ease of use for people with
-disabilities, or whether the site's features work.
-
-## What each file does
-
-- `static/index.html`: the page's content and structure.
-- `static/styles.css`: how the page looks and fits different screen sizes.
-- `static/script.js`: what the page does when you interact with it.
-- `scripts/check.py`: checks the basic project files.
+Login rate limits and password recovery are not built yet. Add login rate limits
+before opening account registration to the public.
 
 ## License
 

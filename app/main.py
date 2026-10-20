@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import initialize_database
+from packages.auth.routes import router as auth_router
 from packages.catalog.anilist_client import AniListClient, RateLimited
 
 
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AnimeRater", lifespan=lifespan)
+app.include_router(auth_router)
 
 ROOT = Path(__file__).resolve().parents[1] / "static"
 app.mount("/static", StaticFiles(directory=ROOT), name="static")

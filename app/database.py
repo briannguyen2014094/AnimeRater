@@ -13,7 +13,9 @@ def get_connection(database_path=DATABASE_PATH):
     """Open a connection, commit successful work, and always close it."""
     database_path = Path(database_path)
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path)
+    # FastAPI may enter and exit one request's dependency on different threads.
+    # Each request still gets its own connection; never share it across requests.
+    connection = sqlite3.connect(database_path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     # SQLite requires foreign keys to be enabled on every connection.
     connection.execute("PRAGMA foreign_keys = ON")
