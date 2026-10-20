@@ -22,30 +22,28 @@ SQLite is included with Python. No separate database server is needed.
 
 ## Getting started
 
-Open a terminal in the AnimeRater folder and follow the steps for your system.
+Open a terminal in the AnimeRater folder.
 
 ### Windows (PowerShell)
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt uvicorn
-$env:SESSION_COOKIE_SECURE = "false"
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python run.py
 ```
 
 ### macOS or Linux
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt uvicorn
-SESSION_COOKIE_SECURE=false .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python3 run.py
 ```
 
 Open <http://127.0.0.1:8000>. Press Ctrl+C to stop the server.
 
-For later runs, skip the first two commands. In a new PowerShell terminal,
-set `SESSION_COOKIE_SECURE` again before starting the server.
-If port 8000 is busy, change it to 8001 in the command and browser address.
+Use the same command each time. It creates `.venv` if needed, installs missing
+dependencies, sets up local login cookies, and starts the server. Python changes
+restart the server automatically; refresh the browser to see frontend changes.
+
+If port 8000 is busy, add `--port 8001` to the command and open
+<http://127.0.0.1:8001>.
 
 ## Configuration
 
@@ -54,7 +52,8 @@ If port 8000 is busy, change it to 8001 in the command and browser address.
 | `SESSION_COOKIE_SECURE` | `true` | Requires HTTPS for login cookies. Set to `false` only for local HTTP use. |
 
 Set this variable in your terminal or hosting settings. The app does not load
-`.env` files automatically.
+`.env` files automatically. The local `run.py` script sets it to `false` for its
+server process only; use this script for local development.
 
 The app creates `data/animerater.db` on startup. This file stores users, sessions,
 and the favorites table. It is ignored by Git, so each developer has their own
