@@ -40,6 +40,39 @@ Press Ctrl+C in the terminal to stop the site. If port 8000 is already in use,
 replace `8000` with `8001` in both the command and the browser address.
 This server command is only for testing the site on your own computer.
 
+## SQLite database
+
+The backend uses Python's built-in `sqlite3` module. Starting FastAPI creates
+`data/animerater.db` automatically, including any missing tables. To create it
+without starting the server, run:
+
+```sh
+python -m app.database
+```
+
+The initial tables are:
+
+- `users`: unique username (case-insensitive), password hash, and creation time.
+- `sessions`: session token hash, user ID, and expiration as Unix seconds.
+- `favorites`: user ID and AniList anime ID, with no duplicate pairs.
+
+Foreign keys link sessions and favorites to users. Deleting a user also deletes
+their sessions and favorites. Creation timestamps use UTC. Store password and
+session token hashes, never raw passwords or session tokens.
+
+`app/database.py` provides `initialize_database()` and `get_connection()`.
+Use the connection helper in a `with` block; it commits on success, rolls back
+on errors, and closes the connection. Pass SQL values separately using `?`
+placeholders rather than inserting user input into SQL strings.
+
+The database is local and ignored by Git; each developer gets their own file.
+Keep the deployed database on persistent local storage outside the public
+`static/` folder. Table setup preserves existing records; future changes to
+existing table definitions will need explicit SQL migration steps.
+
+This is only the database foundation. Signup, login, and server-side favorites
+are not connected yet; favorites still use browser localStorage.
+
 ## Favorites
 
 Use the heart on any anime card to save or remove a favorite. **All Anime**

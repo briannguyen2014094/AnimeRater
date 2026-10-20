@@ -1,11 +1,20 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.database import initialize_database
 from packages.catalog.anilist_client import AniListClient, RateLimited
 
-app = FastAPI(title="AnimeRater")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_database()
+    yield
+
+
+app = FastAPI(title="AnimeRater", lifespan=lifespan)
 
 ROOT = Path(__file__).resolve().parents[1] / "static"
 app.mount("/static", StaticFiles(directory=ROOT), name="static")
