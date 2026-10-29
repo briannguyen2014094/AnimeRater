@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from packages.ratings.service import initialize_ratings
+
 
 DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "animerater.db"
 
@@ -66,6 +68,7 @@ def initialize_database(database_path=DATABASE_PATH):
         favorite_columns = {row["name"] for row in connection.execute("PRAGMA table_info(favorites)")}
         if "details" not in favorite_columns:
             connection.execute("ALTER TABLE favorites ADD COLUMN details TEXT NOT NULL DEFAULT '{}'")
+        initialize_ratings(connection)
 
 
 if __name__ == "__main__":

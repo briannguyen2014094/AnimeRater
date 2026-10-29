@@ -9,10 +9,12 @@ and JavaScript. Anime data comes from AniList.
 
 - Browse and search anime, and view details.
 - Save favorites to your account (login required), available across browsers and devices.
+- Set, edit, or remove a personal whole-number rating from 1–10 in the anime details modal.
+  Your rating is saved to your account and displayed separately from the AniList score.
 - Create accounts and log in through the website or API.
 - Recover passwords through emailed, single-use links that expire after 30 minutes.
 
-Account-based ratings are not built yet. Old guest favorites in browser storage are
+Old guest favorites in browser storage are
 not automatically imported into an account.
 
 ## Requirements
@@ -64,8 +66,8 @@ Set this variable in your terminal or hosting settings. The app does not load
 server process only; use this script for local development.
 
 The app creates `data/animerater.db` on startup. This file stores users, sessions,
-and the favorites table. It is ignored by Git, so each developer has their own
-local database. The website saves favorites in this database for each account.
+favorites, and personal ratings. It is ignored by Git, so each developer has their own
+local database. Existing databases gain the ratings table automatically on startup.
 
 ### Password recovery
 
@@ -112,9 +114,9 @@ On macOS or Linux:
 ```
 
 The first command checks page files and links, plus JavaScript syntax if Node.js
-is installed. The second tests authentication and account favorites using temporary databases.
-With Node.js installed, run `node --test tests/favorites-ui.test.cjs` to test the
-favorites UI login requirement, persistence, and failure handling.
+is installed. The second tests authentication, favorites, and personal ratings using temporary databases.
+With Node.js installed, run `node --test tests/*.test.cjs` to test the
+favorites and ratings UI, including validation, failure handling, and account switching.
 
 ## Project structure
 
@@ -124,6 +126,7 @@ favorites UI login requirement, persistence, and failure handling.
 | `packages/auth/` | Account and login API code. |
 | `packages/catalog/` | AniList API client. |
 | `packages/favorites/` | Account favorites API code. |
+| `packages/ratings/` | Personal rating models, routes, and SQLite logic. |
 | `packages/search/`, `packages/reviews/` | Placeholders for future work. |
 | `static/` | Frontend HTML, CSS, and JavaScript. |
 | `scripts/` | Project checks. |
@@ -133,8 +136,15 @@ favorites UI login requirement, persistence, and failure handling.
 ## API reference
 
 With the server running, open <http://127.0.0.1:8000/docs> to view the API routes
-and request formats. Authentication POST requests and favorites POST/DELETE requests require the header
+and request formats. Authentication POST requests, favorites POST/DELETE requests,
+and ratings PUT/DELETE requests require the header
 `X-Requested-With: AnimeRater`.
+
+Personal ratings require a logged-in session. `GET /api/ratings/{anime_id}` returns
+`{"anime_id": 1, "rating": null}` when no rating is saved. `PUT` on the same URL
+accepts `{"rating": 8}` to create or replace a rating; `DELETE` removes it.
+Ratings must be JSON integers from 1 through 10. Each account has its own rating
+for each anime, independent of favorites.
 
 ## Deployment
 

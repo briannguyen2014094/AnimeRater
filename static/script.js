@@ -301,6 +301,110 @@ window.addToFavorites = async (event, btn, i) => {
 };
 
 let synopsisToken = 0;
+let modalAnimeId = null;
+let ratingRequest = 0;
+let ratingState = {};
+const RATING_LABELS = ["Masterpiece", "Great", "Very Good", "Good", "Fine", "Average", "Bad", "Very Bad", "Horrible", "Appalling"];
+
+function renderRating() {
+    const panel = $("modal-rating");
+    if (modalAnimeId === null || !panel) return;
+    if (!currentUsername) {
+        panel.innerHTML = '<h3>Your rating</h3><p>Log in to rate this anime.</p><button id="rating-login" type="button">Log in</button>';
+        $("rating-login").onclick = openAuthModal;
+        return;
+    }
+    const busy = ratingState.loading || ratingState.saving;
+    panel.innerHTML = `
+        <h3>Your rating</h3>
+        <p>${!ratingState.loaded ? "Your rating has not loaded." : ratingState.value == null ? "Not rated yet" : `${ratingState.value}/10`}</p>
+        <form id="rating-form" novalidate>
+            <label for="rating-input">Choose a rating</label>
+            <div class="rating-controls">
+                <select id="rating-input" required ${busy || !ratingState.loaded ? "disabled" : ""}>
+                    <option value="">Select</option>
+                    ${RATING_LABELS.map((label, index) => {
+                        const value = 10 - index;
+                        return `<option value="${value}" ${Number(ratingState.draft) === value ? "selected" : ""}>(${value}) ${label}</option>`;
+                    }).join("")}
+                </select>
+                <button type="submit" ${busy || !ratingState.loaded ? "disabled" : ""}>Save rating</button>
+                <button id="rating-remove" type="button" ${busy || ratingState.value == null ? "disabled" : ""}>Remove rating</button>
+            </div>
+        </form>
+        <p role="status">${escapeHtml(ratingState.loading ? "Loading your rating…" : ratingState.saving ? "Saving…" : ratingState.message || "")}</p>
+        <p class="auth-error" role="alert" ${ratingState.error ? "" : "hidden"}>${escapeHtml(ratingState.error)}</p>
+        ${!ratingState.loaded && !busy ? '<button id="rating-retry" type="button">Try again</button>' : ""}
+    `;
+    $("rating-form").onsubmit = (event) => { event.preventDefault(); saveRating(false); };
+    $("rating-remove").onclick = () => saveRating(true);
+    if (!ratingState.loaded && !busy) $("rating-retry").onclick = loadRating;
+}
+
+async function loadRating() {
+    const request = ++ratingRequest;
+    const version = authVersion;
+    const animeId = modalAnimeId;
+    ratingState = { loading: !!currentUsername };
+    renderRating();
+    if (!currentUsername || animeId === null) return;
+    try {
+        const res = await authFetch(`/api/ratings/${animeId}`);
+        if (request !== ratingRequest || version !== authVersion) return;
+        if (res.status === 401) return await setAuthState(null);
+        if (!res.ok) throw new Error("Rating unavailable");
+        const data = await res.json();
+        if (request !== ratingRequest || version !== authVersion) return;
+        ratingState = { value: data.rating, draft: data.rating, loaded: true };
+    } catch {
+        if (request !== ratingRequest || version !== authVersion) return;
+        ratingState = { error: "Couldn't load your rating. Please try again." };
+    }
+    renderRating();
+}
+
+async function saveRating(removing) {
+    if (!currentUsername || !ratingState.loaded || ratingState.saving) return;
+    ratingState.draft = $("rating-input").value;
+    const rating = Number(ratingState.draft);
+    if (!removing && (!String(ratingState.draft).trim() || !Number.isInteger(rating) || rating < 1 || rating > 10)) {
+        ratingState.error = "Enter a whole number from 1 to 10.";
+        ratingState.message = "";
+        renderRating();
+        return;
+    }
+    const request = ++ratingRequest;
+    const version = authVersion;
+    ratingState.saving = true;
+    ratingState.error = "";
+    ratingState.message = "";
+    renderRating();
+    try {
+        const res = await authFetch(`/api/ratings/${modalAnimeId}`, {
+            method: removing ? "DELETE" : "PUT",
+            ...(removing ? {} : { body: JSON.stringify({ rating }) }),
+        });
+        if (request !== ratingRequest || version !== authVersion) return;
+        if (res.status === 401) return await setAuthState(null);
+        if (!res.ok) throw new Error("Save failed");
+        ratingState.value = removing ? null : rating;
+        ratingState.draft = ratingState.value;
+        ratingState.message = removing ? "Rating removed." : "Rating saved.";
+    } catch {
+        if (request !== ratingRequest || version !== authVersion) return;
+        ratingState.error = removing ? "Couldn't remove your rating. Please try again." : "Couldn't save your rating. Please try again.";
+    }
+    if (request !== ratingRequest || version !== authVersion) return;
+    ratingState.saving = false;
+    renderRating();
+}
+
+function closeAnimeModal() {
+    modal.classList.add("hidden");
+    modalAnimeId = null;
+    ++ratingRequest;
+    ++synopsisToken;
+}
 
 function setSynopsisText(token, text) {
     if (token !== synopsisToken) return;
@@ -333,6 +437,7 @@ async function loadSynopsis(a) {
 
 window.openModal = (i) => {
     const a = visibleAnime[i];
+    modalAnimeId = Number(a.anilist_id || a.id);
     const genres = a.genres || [];
     const genreTokens = genres.length
         ? genres.map((g) => `<span class="chip">${escapeHtml(g)}</span>`).join("")
@@ -346,25 +451,27 @@ window.openModal = (i) => {
             <div class="modal-heading">
                 <h2>${escapeHtml(a.title)}</h2>
                 <div class="modal-stats">
-                    <span><span class="star">★</span> ${escapeHtml(a.score ?? "N/A")}</span>
+                    <span>AniList score: <span class="star">★</span> ${escapeHtml(a.score ?? "N/A")}</span>
                     <span>${episodeLabel(a)}</span>
                 </div>
                 <div class="modal-genres">${genreTokens}</div>
             </div>
         </div>
+        <section id="modal-rating" class="modal-rating" aria-label="Your rating"></section>
         <div class="modal-synopsis">
             <h3>Synopsis</h3>
             <p id="modal-synopsis-text">${escapeHtml(a.synopsis || pendingSynopsis)}</p>
         </div>
     `;
     modal.classList.remove("hidden");
+    loadRating();
     loadSynopsis(a);
 };
 
-$("close").onclick = () => modal.classList.add("hidden");
-modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
+$("close").onclick = closeAnimeModal;
+modal.onclick = (e) => { if (e.target === modal) closeAnimeModal(); };
 document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modal.classList.contains("hidden")) modal.classList.add("hidden");
+    if (event.key === "Escape" && !modal.classList.contains("hidden")) closeAnimeModal();
 });
 prev.forEach((button) => { button.onclick = () => page > 1 && (activeQuery ? search(activeQuery, page - 1) : load(page - 1)); });
 next.forEach((button) => { button.onclick = () => (activeQuery ? search(activeQuery, page + 1) : load(page + 1)); });
@@ -449,6 +556,7 @@ function showAuthError(message = "") {
 async function setAuthState(username) {
     currentUsername = username || null;
     const version = ++authVersion;
+    if (modalAnimeId !== null) loadRating();
     favorites.clear();
     favoriteDetails.clear();
     favoritesReady = false;

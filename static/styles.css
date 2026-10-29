@@ -302,6 +302,27 @@ button:disabled {
     gap: 16px;
     margin-bottom: 16px;
   }
+
+.modal-rating {
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+}
+
+.modal-rating p { margin: 8px 0; }
+.rating-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rating-controls select {
+  max-width: 100%;
+  padding: 8px;
+  background-color: #334155;
+  color: #e2e8f0;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  font: inherit;
+  color-scheme: dark;
+}
+.rating-controls button:disabled { opacity: 0.5; cursor: wait; }
   
   .modal-cover {
     width: 160px;
