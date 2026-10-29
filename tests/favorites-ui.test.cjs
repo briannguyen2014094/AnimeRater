@@ -32,6 +32,7 @@ async function browser() {
             const response = (status, data) => ({ status, ok: status < 400, json: async () => data });
             if (url === "/api/auth/me") return response(401, {});
             if (url.startsWith("/api/catalog/")) return response(200, { data: [{ id: 1, title: "Cowboy Bebop" }] });
+            if (url === "/api/ratings") return response(200, { data: [] });
             if (url.startsWith("/api/favorites")) {
                 if (!account || expire) return response(401, {});
                 const favorites = saved.get(account) || [];
@@ -44,6 +45,7 @@ async function browser() {
             throw new Error(`Unexpected URL: ${url}`);
         },
     });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "../static/ratings/library.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(__dirname, "../static/script.js"), "utf8"), context);
     await new Promise(setImmediate);
     return {

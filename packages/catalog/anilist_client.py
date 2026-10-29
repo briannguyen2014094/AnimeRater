@@ -124,6 +124,41 @@ class AniListClient:
         # once AniList answers 429, stop calling until the window it gave us has passed
         self._rate_limited_until = 0.0
     
+    def get_anime_by_ids(self, anime_ids: list[int]) -> dict[int, dict[str, Any]]:
+        """Resolve saved AniList IDs in batches instead of one request per rating."""
+        result = {}
+        # GraphQL Int is signed 32-bit; older API callers could save larger IDs.
+        anime_ids = [anime_id for anime_id in anime_ids if 0 < anime_id <= 2147483647]
+        query = """
+        query RatedAnime($ids: [Int], $perPage: Int) {
+            Page(page: 1, perPage: $perPage) {
+                media(id_in: $ids, type: ANIME, isAdult: false) {
+                    id idMal title { english romaji } episodes averageScore
+                    coverImage { large } genres
+                }
+            }
+        }
+        """
+        for start in range(0, len(anime_ids), ANILIST_MAX_PER_PAGE):
+            ids = anime_ids[start:start + ANILIST_MAX_PER_PAGE]
+            key = ("rated", *ids)
+            cached = self._cache_get(key)
+            if cached is None:
+                remaining = self._rate_limit_remaining()
+                if remaining:
+                    cached = self._stale_or_raise(key, remaining)
+                else:
+                    try:
+                        payload = self._post(query, {"ids": ids, "perPage": len(ids)})
+                        if payload.get("errors"):
+                            raise RuntimeError("AniList could not resolve rated anime")
+                        cached = [self._normalize_anime(item) for item in payload["data"]["Page"]["media"]]
+                        self._cache_put(key, cached)
+                    except RateLimited as exc:
+                        cached = self._stale_or_raise(key, exc.retry_after)
+            result.update({anime["anilist_id"]: anime for anime in cached})
+        return result
+
     @staticmethod
     def _clean_html(raw_html: str | None) -> str | None:
         """AniList descriptions often contain <br> or <i> tags; strip them cleanly."""

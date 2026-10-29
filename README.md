@@ -9,6 +9,8 @@ and JavaScript. Anime data comes from AniList.
 
 - Browse and search anime, and view details.
 - Save favorites to your account (login required), available across browsers and devices.
+- Browse **My Ratings** to see all rated anime, search by title, and sort by personal
+  rating (highest or lowest first) or title. Cards label Your rating separately from AniList.
 - Set, edit, or remove a personal whole-number rating from 1–10 in the anime details modal.
   Your rating is saved to your account and displayed separately from the AniList score.
 - Create accounts and log in through the website or API.
@@ -140,7 +142,10 @@ and request formats. Authentication POST requests, favorites POST/DELETE request
 and ratings PUT/DELETE requests require the header
 `X-Requested-With: AnimeRater`.
 
-Personal ratings require a logged-in session. `GET /api/ratings/{anime_id}` returns
+Personal ratings require a logged-in session. `GET /api/ratings` lists the current
+account’s saved rating IDs and values. `GET /api/ratings/library` includes anime
+details, resolved from AniList in batches; unavailable anime remain in the list
+so their ratings can still be edited or removed. `GET /api/ratings/{anime_id}` returns
 `{"anime_id": 1, "rating": null}` when no rating is saved. `PUT` on the same URL
 accepts `{"rating": 8}` to create or replace a rating; `DELETE` removes it.
 Ratings must be JSON integers from 1 through 10. Each account has its own rating

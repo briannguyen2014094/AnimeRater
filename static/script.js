@@ -102,17 +102,37 @@ function renderFavoriteCount() {
 }
 
 function render() {
-    pagination.forEach((controls) => { controls.hidden = view === "favorites"; });
-    grid.setAttribute("aria-busy", String(loading));
+    pagination.forEach((controls) => { controls.hidden = view !== "all"; });
+    grid.setAttribute("aria-busy", String(view === "ratings" ? ratingsLoading : loading));
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
+    $("my-ratings").setAttribute("aria-pressed", String(view === "ratings"));
+    $("ratings-controls").hidden = view !== "ratings";
+    $("search").placeholder = view === "ratings" ? "Search your rated anime..." : "Search anime...";
+    $("ratings-status").textContent = view === "ratings" && !ratingsLoading && !ratingsError && ratingsReady
+        ? `${filteredRatings().length} rated anime` : "";
     renderFavoriteCount();
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
     prev.forEach((button) => { button.disabled = loading || page <= 1; });
     next.forEach((button) => { button.disabled = loading || !hasMore; });
     visibleAnime = view === "favorites"
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
-        : animeList;
+        : view === "ratings" ? filteredRatings() : animeList;
+    if (view === "ratings" && (ratingsLoading || ratingsError || !ratingsReady)) {
+        grid.innerHTML = ratingsLoading
+            ? '<p class="empty-state" role="status">Loading your rated anime…</p>'
+            : `<div class="empty-state"><p role="alert">${escapeHtml(ratingsError || "Your ratings have not loaded.")}</p><button id="ratings-retry" type="button">Try again</button></div>`;
+        if (!ratingsLoading) $("ratings-retry").onclick = () => loadPersonalRatings(true);
+        return;
+    }
+    if (view === "ratings" && !visibleAnime.length) {
+        grid.innerHTML = ratedAnime.length
+            ? '<div class="empty-state"><h2>No matching titles</h2><p>Try another title or clear your search.</p><button id="ratings-clear" type="button">Clear search</button></div>'
+            : '<div class="empty-state"><h2>No ratings yet</h2><p>Open an anime and choose Your rating to start your list.</p><button id="browse-anime" type="button">Browse anime</button></div>';
+        if (ratedAnime.length) $("ratings-clear").onclick = () => { ratingsQuery = ""; $("search").value = ""; render(); $("search").focus(); };
+        else $("browse-anime").onclick = () => { setView("all"); $("all-anime").focus(); };
+        return;
+    }
     if (view === "all" && catalogError) {
         const fallback = activeQuery ? "We couldn’t run that search. Please try again." : "We couldn’t load the catalog. Please try again.";
         grid.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage || fallback)}</p><button id="retry" type="button">Try again</button></div>`;
@@ -146,17 +166,18 @@ function render() {
         return;
     }
     grid.innerHTML = visibleAnime.map((a, i) => `
-        <div class="card" onclick="openModal(${i})">
+        <article class="card" onclick="openModal(${i})">
           <div class="poster">
             ${a.image_url ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.title)}" loading="lazy">` : ""}
-            <span class="score-badge"><span class="star">★</span> ${escapeHtml(a.score ?? "N/A")}</span>
+            <span class="score-badge">AniList: <span class="star">★</span> ${escapeHtml(a.score ?? "N/A")}</span>
             <button class="favorite-btn${favorites.has(a.id) ? " favorited" : ""}" type="button" aria-pressed="${favorites.has(a.id)}" aria-label="${favorites.has(a.id) ? "Remove from favorites" : "Add to favorites"}" onclick="addToFavorites(event, this, ${i})">${favorites.has(a.id) ? "♥" : "♡"}</button>
           </div>
           <div class="card-body">
-            <h3>${escapeHtml(a.title)}</h3>
-            <p>${a.unresolved ? "Browse the catalog to restore details." : episodeLabel(a)}</p>
+            <h3><button class="anime-title" id="anime-${ratingId(a)}" type="button" onclick="event.stopPropagation(); openModal(${i})">${escapeHtml(a.title)}</button></h3>
+            <p class="personal-rating">Your rating: ${escapeHtml(cardRating(a))}</p>
+            <p>${a.unresolved ? "Anime details are unavailable." : episodeLabel(a)}</p>
           </div>
-        </div>
+        </article>
     `).join("");
 }
 
@@ -225,7 +246,14 @@ async function search(q, p = 1) {
 
 function setView(selectedView) {
     if (selectedView === "favorites" && !requireFavoriteAccount()) return;
+    if (selectedView === "ratings" && !currentUsername) {
+        openAuthModal();
+        showAuthNotice("Log in or sign up to see your ratings.");
+        return;
+    }
     view = selectedView;
+    $("search").value = view === "ratings" ? ratingsQuery : activeQuery;
+    if (selectedView === "ratings" && !ratingsReady) loadPersonalRatings(true);
     if (selectedView === "favorites" && !favoritesReady) loadFavorites();
     if (selectedView === "all" && activeQuery) {
         // "All Anime" means the catalog, so leave search mode behind
@@ -302,6 +330,8 @@ window.addToFavorites = async (event, btn, i) => {
 
 let synopsisToken = 0;
 let modalAnimeId = null;
+let modalAnime = null;
+let modalReturnId = null;
 let ratingRequest = 0;
 let ratingState = {};
 const RATING_LABELS = ["Masterpiece", "Great", "Very Good", "Good", "Fine", "Average", "Bad", "Very Bad", "Horrible", "Appalling"];
@@ -375,6 +405,7 @@ async function saveRating(removing) {
     }
     const request = ++ratingRequest;
     const version = authVersion;
+    const anime = modalAnime;
     ratingState.saving = true;
     ratingState.error = "";
     ratingState.message = "";
@@ -384,9 +415,11 @@ async function saveRating(removing) {
             method: removing ? "DELETE" : "PUT",
             ...(removing ? {} : { body: JSON.stringify({ rating }) }),
         });
-        if (request !== ratingRequest || version !== authVersion) return;
+        if (version !== authVersion) return;
         if (res.status === 401) return await setAuthState(null);
         if (!res.ok) throw new Error("Save failed");
+        updateLibraryRating(anime, removing ? null : rating);
+        if (request !== ratingRequest) return;
         ratingState.value = removing ? null : rating;
         ratingState.draft = ratingState.value;
         ratingState.message = removing ? "Rating removed." : "Rating saved.";
@@ -397,11 +430,13 @@ async function saveRating(removing) {
     if (request !== ratingRequest || version !== authVersion) return;
     ratingState.saving = false;
     renderRating();
+    $("rating-input").focus();
 }
 
 function closeAnimeModal() {
     modal.classList.add("hidden");
     modalAnimeId = null;
+    ($(modalReturnId) || $(view === "ratings" ? "my-ratings" : view === "favorites" ? "favorites" : "all-anime")).focus();
     ++ratingRequest;
     ++synopsisToken;
 }
@@ -437,7 +472,9 @@ async function loadSynopsis(a) {
 
 window.openModal = (i) => {
     const a = visibleAnime[i];
-    modalAnimeId = Number(a.anilist_id || a.id);
+    modalAnime = a;
+    modalReturnId = `anime-${ratingId(a)}`;
+    modalAnimeId = ratingId(a);
     const genres = a.genres || [];
     const genreTokens = genres.length
         ? genres.map((g) => `<span class="chip">${escapeHtml(g)}</span>`).join("")
@@ -464,6 +501,7 @@ window.openModal = (i) => {
         </div>
     `;
     modal.classList.remove("hidden");
+    $("close").focus();
     loadRating();
     loadSynopsis(a);
 };
@@ -472,14 +510,24 @@ $("close").onclick = closeAnimeModal;
 modal.onclick = (e) => { if (e.target === modal) closeAnimeModal(); };
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.classList.contains("hidden")) closeAnimeModal();
+    if (event.key === "Tab" && !modal.classList.contains("hidden") && authModal.classList.contains("hidden")) {
+        const controls = [...modal.querySelectorAll('button:not(:disabled), select:not(:disabled)')];
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
 });
 prev.forEach((button) => { button.onclick = () => page > 1 && (activeQuery ? search(activeQuery, page - 1) : load(page - 1)); });
 next.forEach((button) => { button.onclick = () => (activeQuery ? search(activeQuery, page + 1) : load(page + 1)); });
 $("all-anime").onclick = () => setView("all");
 $("favorites").onclick = () => setView("favorites");
+$("my-ratings").onclick = () => setView("ratings");
+$("ratings-sort").onchange = () => { ratingsSort = $("ratings-sort").value; render(); };
 
 function runSearch() {
     const q = $("search").value.trim();
+    if (view === "ratings") { ratingsQuery = q; render(); return; }
+    view = "all";
     if (!q) {
         // an empty box means "show me the catalog", not "search for nothing"
         activeQuery = "";
@@ -556,6 +604,7 @@ function showAuthError(message = "") {
 async function setAuthState(username) {
     currentUsername = username || null;
     const version = ++authVersion;
+    resetRatings();
     if (modalAnimeId !== null) loadRating();
     favorites.clear();
     favoriteDetails.clear();
@@ -565,9 +614,9 @@ async function setAuthState(username) {
     if (loggedIn) $("account-name").textContent = username;
     $("account").hidden = !loggedIn;
     $("login-btn").hidden = loggedIn;
-    if (!loggedIn && view === "favorites") view = "all";
+    if (!loggedIn && view !== "all") view = "all";
     render();
-    if (loggedIn) await loadFavorites(version);
+    if (loggedIn) await Promise.all([loadFavorites(version), loadPersonalRatings(view === "ratings")]);
 }
 
 function setAuthMode(mode) {

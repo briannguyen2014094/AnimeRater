@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AnimeRater - Browse Top Anime</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -91,6 +92,16 @@
   <div class="view-controls" role="group" aria-label="Anime view">
     <button id="all-anime" type="button" aria-pressed="true" aria-controls="grid">All Anime</button>
     <button id="favorites" type="button" aria-pressed="false" aria-controls="grid">Favorites</button>
+    <button id="my-ratings" type="button" aria-pressed="false" aria-controls="grid">My Ratings</button>
+  </div>
+  <div id="ratings-controls" class="ratings-toolbar" hidden>
+    <label for="ratings-sort">Sort your ratings</label>
+    <select id="ratings-sort">
+      <option value="highest">Personal rating: highest first</option>
+      <option value="lowest">Personal rating: lowest first</option>
+      <option value="title">Title: A–Z</option>
+    </select>
+    <p id="ratings-status" role="status"></p>
   </div>
   <p id="storage-notice" class="storage-notice" role="status" hidden></p>
   <div class="pagination-top">
@@ -106,13 +117,14 @@
     <button class="next">Next &rarr;</button>
   </div>
 
-  <div id="modal" class="modal hidden">
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Anime details">
     <div class="modal-box">
-      <button id="close">&times;</button>
+      <button id="close" type="button" aria-label="Close anime details">&times;</button>
       <div id="modal-content"></div>
     </div>
   </div>
 
+  <script src="/static/ratings/library.js"></script>
   <script src="/static/script.js"></script>
 </body>
 </html>

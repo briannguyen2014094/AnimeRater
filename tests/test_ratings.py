@@ -4,12 +4,14 @@ import sqlite3
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.database import get_connection, initialize_database
 from app.main import app
 from packages.auth.routes import get_database
+from packages.catalog.anilist_client import AniListClient, RateLimited
 
 
 class RatingsTests(unittest.TestCase):
@@ -97,6 +99,8 @@ class RatingsTests(unittest.TestCase):
                 self.login("student")
                 self.client.post("/api/auth/logout", headers=self.headers)
             with self.subTest(phase=phase):
+                self.assertEqual(self.client.get("/api/ratings").status_code, 401)
+                self.assertEqual(self.client.get("/api/ratings/library").status_code, 401)
                 self.assertEqual(self.client.get("/api/ratings/1").status_code, 401)
                 self.assertEqual(self.save(5).status_code, 401)
                 self.assertEqual(self.client.delete("/api/ratings/1", headers=self.headers).status_code, 401)
@@ -107,6 +111,62 @@ class RatingsTests(unittest.TestCase):
         self.save(7)
         self.assertEqual(self.client.delete("/api/ratings/1").status_code, 403)
         self.assertEqual(self.client.get("/api/ratings/1").json()["rating"], 7)
+
+    def test_library_includes_existing_ratings_and_preserves_anilist_ids(self):
+        self.login("first")
+        self.save(9, 101)
+        self.save(4, 202)
+        with patch("packages.ratings.routes.anilist.get_anime_by_ids", return_value={
+            101: {"id": 5, "anilist_id": 101, "title": "Saved show", "score": 7.5},
+        }) as lookup:
+            response = self.client.get("/api/ratings/library")
+            lookup.assert_called_once_with([101, 202])
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        rows = response.json()["data"]
+        self.assertEqual((rows[0]["id"], rows[0]["anilist_id"], rows[0]["rating"]), (5, 101, 9))
+        self.assertTrue(rows[1]["unresolved"])
+        self.assertEqual(rows[1]["anilist_id"], 202)
+        self.assertEqual(self.client.get("/api/ratings").json()["data"], [
+            {"anime_id": 101, "rating": 9}, {"anime_id": 202, "rating": 4},
+        ])
+        self.login("second")
+        with patch("packages.ratings.routes.anilist.get_anime_by_ids", return_value={}) as lookup:
+            self.assertEqual(self.client.get("/api/ratings/library").json(), {"data": []})
+            lookup.assert_called_once_with([])
+        self.assertEqual(self.client.get("/api/ratings").json(), {"data": []})
+        self.client.post("/api/auth/logout", headers=self.headers)
+        for path in ("/api/ratings", "/api/ratings/library"):
+            self.assertEqual(self.client.get(path).status_code, 401)
+
+    def test_library_reports_upstream_failures_without_losing_ratings(self):
+        self.login("student")
+        self.save(8)
+        for error, status in ((RuntimeError("offline"), 502), (RateLimited(30), 503)):
+            with patch("packages.ratings.routes.anilist.get_anime_by_ids", side_effect=error):
+                response = self.client.get("/api/ratings/library")
+            self.assertEqual(response.status_code, status)
+            if status == 503:
+                self.assertEqual(response.headers["retry-after"], "30")
+            self.assertEqual(self.client.get("/api/ratings/1").json()["rating"], 8)
+
+    def test_rated_anime_lookup_batches_caches_and_does_not_guess_mal_ids(self):
+        client = AniListClient()
+        self.addCleanup(client.client.close)
+        def payload(query, variables):
+            return {"data": {"Page": {"media": [
+                {"id": anime_id, "idMal": anime_id + 1000, "title": {"english": str(anime_id)}}
+                for anime_id in variables["ids"]
+            ]}}}
+        with patch.object(client, "_post", side_effect=payload) as post:
+            self.assertEqual(client.get_anime_by_ids([]), {})
+            self.assertEqual(client.get_anime_by_ids([9007199254740991]), {})
+            self.assertEqual(post.call_count, 0)
+            rows = client.get_anime_by_ids(list(range(1, 122)))
+            self.assertEqual([len(call.args[1]["ids"]) for call in post.call_args_list], [50, 50, 21])
+            self.assertEqual(rows[1]["id"], 1001)
+            self.assertEqual(rows[1]["anilist_id"], 1)
+            client.get_anime_by_ids(list(range(1, 122)))
+            self.assertEqual(post.call_count, 3)
 
     def test_database_constraints_and_account_deletion(self):
         self.login("student")

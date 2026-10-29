@@ -20,6 +20,13 @@ def get_rating(connection, user_id, anime_id):
     return row["rating"] if row else None
 
 
+def list_ratings(connection, user_id):
+    return [dict(row) for row in connection.execute(
+        "SELECT anime_id, rating FROM ratings WHERE user_id = ? ORDER BY anime_id",
+        (user_id,),
+    )]
+
+
 def save_rating(connection, user_id, anime_id, rating):
     connection.execute(
         """INSERT INTO ratings (user_id, anime_id, rating) VALUES (?, ?, ?)

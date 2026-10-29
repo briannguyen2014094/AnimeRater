@@ -36,6 +36,17 @@ async function browser() {
                 data: [1, 2].map((id) => ({ id, anilist_id: id, title: `Anime ${id}`, score: 8.9, synopsis: "Synopsis" })),
             });
             if (url === "/api/favorites") return response(200, { data: [] });
+            if (url === "/api/ratings" || url === "/api/ratings/library") {
+                const owner = account;
+                const rows = [...saved].filter(([key]) => key.startsWith(`${owner}:`)).map(([key, rating]) => {
+                    const id = Number(key.split(":")[1]);
+                    return url.endsWith("library") ? { id: id + 100, anilist_id: id, title: `Anime ${id}`, score: 8.9, rating } : { anime_id: id, rating };
+                });
+                if (pauseNext) { pauseNext = false; await new Promise((resolve) => { resume = resolve; }); }
+                if (!owner || expire) return response(401, {});
+                if (fail) throw new Error("Offline");
+                return response(200, { data: rows });
+            }
             if (url.startsWith("/api/ratings/")) {
                 const owner = account;
                 const id = Number(url.split("/").pop());
@@ -55,6 +66,7 @@ async function browser() {
         },
     });
     const evaluate = (code) => vm.runInContext(code, context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "../static/ratings/library.js"), "utf8"), context);
     evaluate(fs.readFileSync(path.join(__dirname, "../static/script.js"), "utf8"));
     await settle();
     return {
@@ -182,4 +194,72 @@ test("late writes cannot put the previous account's rating into the current moda
     await save;
     assert.equal(ui.evaluate("ratingState.value"), null);
     assert.equal(ui.saved.get("first:1"), 9);
+});
+
+
+test("My Ratings includes off-page anime, searches titles, and sorts personal scores", async () => {
+    const ui = await browser();
+    ui.saved.set("first:23", 3);
+    ui.saved.set("first:7", 10);
+    ui.saved.set("first:11", 6);
+    await ui.login("first");
+    ui.evaluate('setView("ratings")');
+    await settle();
+    assert.equal(ui.evaluate('visibleAnime.map(ratingId).join(",")'), "7,11,23");
+    assert.match(ui.element("grid").innerHTML, /Your rating: 10\/10/);
+    assert.match(ui.element("grid").innerHTML, /AniList:.*8.9/);
+    ui.element("ratings-sort").value = "lowest";
+    ui.element("ratings-sort").onchange();
+    assert.equal(ui.evaluate('visibleAnime.map(ratingId).join(",")'), "23,11,7");
+    ui.element("search").value = "ANIME 11";
+    ui.evaluate("runSearch()");
+    assert.equal(ui.evaluate("visibleAnime.length"), 1);
+    assert.equal(ui.evaluate("ratingId(visibleAnime[0])"), 11);
+    ui.element("search").value = "missing";
+    ui.evaluate("runSearch()");
+    assert.match(ui.element("grid").innerHTML, /No matching titles/);
+    ui.element("ratings-clear").onclick();
+    assert.equal(ui.evaluate("visibleAnime.length"), 3);
+    await ui.open();
+    await ui.save("9");
+    assert.equal(ui.evaluate('visibleAnime.map(ratingId).join(",")'), "11,23,7");
+    await ui.remove();
+    assert.equal(ui.evaluate('visibleAnime.map(ratingId).join(",")'), "11,7");
+    await ui.login("second");
+    assert.match(ui.element("grid").innerHTML, /No ratings yet/);
+});
+
+test("My Ratings handles loading, retry, and stale account responses", async () => {
+    const ui = await browser();
+    ui.evaluate('setView("ratings")');
+    assert.equal(ui.evaluate("view"), "all");
+    ui.saved.set("first:1", 8);
+    await ui.login("first");
+    ui.pause();
+    ui.evaluate('setView("ratings")');
+    assert.match(ui.element("grid").innerHTML, /Loading your rated anime/);
+    await ui.login("second");
+    await ui.resume();
+    assert.match(ui.element("grid").innerHTML, /No ratings yet/);
+    ui.fail();
+    await ui.evaluate("loadPersonalRatings(true)");
+    assert.match(ui.element("grid").innerHTML, /Couldn&#39;t load your ratings/);
+    ui.fail(false);
+    await ui.element("ratings-retry").onclick();
+    assert.match(ui.element("grid").innerHTML, /No ratings yet/);
+});
+
+test("cards and lists update when a rating save finishes after closing the modal", async () => {
+    const ui = await browser();
+    await ui.login("first");
+    await ui.open();
+    ui.pause();
+    const save = ui.save("9");
+    ui.evaluate("closeAnimeModal()");
+    await ui.resume();
+    await save;
+    assert.match(ui.element("grid").innerHTML, /Your rating: 9\/10/);
+    ui.evaluate('setView("ratings")');
+    await settle();
+    assert.equal(ui.evaluate("visibleAnime.length"), 1);
 });
