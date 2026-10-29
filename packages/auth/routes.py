@@ -26,7 +26,7 @@ def protect_auth_requests(request: Request, response: Response):
     response.headers["Cache-Control"] = "no-store"
     # A cross-origin HTML form cannot supply this header. Keep CORS disabled;
     # allowing untrusted origins to send this header would weaken this protection.
-    if request.method == "POST" and request.headers.get("X-Requested-With") != "AnimeRater":
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.headers.get("X-Requested-With") != "AnimeRater":
         raise HTTPException(status_code=403, detail="X-Requested-With: AnimeRater is required")
 
 

@@ -8,11 +8,12 @@ and JavaScript. Anime data comes from AniList.
 ## Current features
 
 - Browse and search anime, and view details.
-- Save favorites in the browser.
+- Save favorites to your account (login required), available across browsers and devices.
 - Create accounts and log in through the website or API.
 - Recover passwords through emailed, single-use links that expire after 30 minutes.
 
-Account-based favorites and ratings are not built yet.
+Account-based ratings are not built yet. Old guest favorites in browser storage are
+not automatically imported into an account.
 
 ## Requirements
 
@@ -64,7 +65,7 @@ server process only; use this script for local development.
 
 The app creates `data/animerater.db` on startup. This file stores users, sessions,
 and the favorites table. It is ignored by Git, so each developer has their own
-local database. The website still saves favorites in the browser.
+local database. The website saves favorites in this database for each account.
 
 ### Password recovery
 
@@ -111,7 +112,9 @@ On macOS or Linux:
 ```
 
 The first command checks page files and links, plus JavaScript syntax if Node.js
-is installed. The second tests the login API using a temporary database.
+is installed. The second tests authentication and account favorites using temporary databases.
+With Node.js installed, run `node --test tests/favorites-ui.test.cjs` to test the
+favorites UI login requirement, persistence, and failure handling.
 
 ## Project structure
 
@@ -120,6 +123,7 @@ is installed. The second tests the login API using a temporary database.
 | `app/` | FastAPI setup and SQLite helpers. |
 | `packages/auth/` | Account and login API code. |
 | `packages/catalog/` | AniList API client. |
+| `packages/favorites/` | Account favorites API code. |
 | `packages/search/`, `packages/reviews/` | Placeholders for future work. |
 | `static/` | Frontend HTML, CSS, and JavaScript. |
 | `scripts/` | Project checks. |
@@ -129,7 +133,7 @@ is installed. The second tests the login API using a temporary database.
 ## API reference
 
 With the server running, open <http://127.0.0.1:8000/docs> to view the API routes
-and request formats. Authentication POST requests require the header
+and request formats. Authentication POST requests and favorites POST/DELETE requests require the header
 `X-Requested-With: AnimeRater`.
 
 ## Deployment

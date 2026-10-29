@@ -12,6 +12,11 @@ let hasMore = true;
 const PAGE_SIZE = 25;
 const favorites = new Set();
 const favoriteDetails = new Map();
+let currentUsername = null;
+let authVersion = 0;
+let favoritesReady = false;
+let favoriteSaving = false;
+let favoritesRequest = 0;
 
 const $ = (id) => document.getElementById(id);
 const grid = $("grid"), pageNum = document.querySelectorAll(".page"), prev = document.querySelectorAll(".prev"), next = document.querySelectorAll(".next"), modal = $("modal"), modalContent = $("modal-content");
@@ -22,15 +27,6 @@ const validId = (id) => (typeof id === "number" || typeof id === "string") && St
 function storageNotice(message) {
     $("storage-notice").textContent = message;
     $("storage-notice").hidden = false;
-}
-
-function readStoredArray(key) {
-    try {
-        const value = JSON.parse(localStorage.getItem(key) || "[]");
-        return Array.isArray(value) ? value : [];
-    } catch {
-        return [];
-    }
 }
 
 function animeDetails(anime) {
@@ -47,25 +43,35 @@ function animeDetails(anime) {
     };
 }
 
-for (const id of readStoredArray("favoriteAnimeIds")) {
-    if (validId(id)) favorites.add(Number(id));
-}
-for (const anime of readStoredArray("favoriteAnimeDetails")) {
-    if (!anime || !validId(anime.id)) continue;
-    const id = Number(anime.id);
-    favorites.add(id);
-    if (typeof anime.title === "string" && anime.title.trim()) {
-        favoriteDetails.set(id, animeDetails(anime));
-    }
-}
-
-function saveFavorites() {
+async function loadFavorites(version = authVersion) {
+    const request = ++favoritesRequest;
     try {
-        localStorage.setItem("favoriteAnimeIds", JSON.stringify([...favorites]));
-        localStorage.setItem("favoriteAnimeDetails", JSON.stringify([...favoriteDetails.values()]));
+        const res = await authFetch("/api/favorites");
+        if (version !== authVersion || request !== favoritesRequest) return;
+        if (res.status === 401) {
+            await setAuthState(null);
+            return;
+        }
+        if (!res.ok) throw new Error("Favorites unavailable");
+        const json = await res.json();
+        if (version !== authVersion || request !== favoritesRequest) return;
+        favorites.clear();
+        favoriteDetails.clear();
+        for (const anime of json.data) {
+            if (!anime || !validId(anime.id)) continue;
+            const id = Number(anime.id);
+            favorites.add(id);
+            if (typeof anime.title === "string" && anime.title.trim()) {
+                favoriteDetails.set(id, animeDetails(anime));
+            }
+        }
+        favoritesReady = true;
+        $("storage-notice").hidden = true;
     } catch {
-        storageNotice("Your favorites are available for this visit, but couldn't be saved. Changes may not survive a refresh.");
+        if (version !== authVersion || request !== favoritesRequest) return;
+        storageNotice("Couldn't load your favorites. Select Favorites to try again.");
     }
+    render();
 }
 
 function scrollToTop() {
@@ -119,6 +125,10 @@ function render() {
         grid.innerHTML = "<p>Loading...</p>";
         return;
     }
+    if (view === "favorites" && !favoritesReady) {
+        grid.innerHTML = '<div class="empty-state"><p>Your favorites are not loaded yet. Select Favorites to try again.</p></div>';
+        return;
+    }
     if (view === "favorites" && !favorites.size) {
         grid.innerHTML = '<div class="empty-state"><h2>No favorites yet</h2><p>Save anime with the heart button to find them here.</p><button id="browse-anime" type="button">Browse anime</button></div>';
         $("browse-anime").onclick = () => { setView("all"); $("all-anime").focus(); };
@@ -169,14 +179,11 @@ async function load(p) {
             .map(animeDetails);
         page = p;
         hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
-        let resolved = false;
         for (const anime of animeList) {
             if (favorites.has(anime.id)) {
                 favoriteDetails.set(anime.id, anime);
-                resolved = true;
             }
         }
-        if (resolved) saveFavorites();
     } catch {
         // a network failure has no server message, so the friendly fallback stands
         catalogError = true;
@@ -217,7 +224,9 @@ async function search(q, p = 1) {
 }
 
 function setView(selectedView) {
+    if (selectedView === "favorites" && !requireFavoriteAccount()) return;
     view = selectedView;
+    if (selectedView === "favorites" && !favoritesReady) loadFavorites();
     if (selectedView === "all" && activeQuery) {
         // "All Anime" means the catalog, so leave search mode behind
         activeQuery = "";
@@ -231,17 +240,52 @@ function episodeLabel(a) {
     return a.episodes == null ? "? episodes" : `${a.episodes} ${a.episodes === 1 ? "episode" : "episodes"}`;
 }
 
-window.addToFavorites = (event, btn, i) => {
+function requireFavoriteAccount() {
+    if (currentUsername) return true;
+    openAuthModal();
+    showAuthNotice("Log in or sign up to save anime to your account.");
+    return false;
+}
+
+window.addToFavorites = async (event, btn, i) => {
     event.stopPropagation();
+    if (!requireFavoriteAccount() || favoriteSaving) return;
+    if (!favoritesReady) {
+        await loadFavorites();
+        return;
+    }
     const anime = visibleAnime[i];
-    if (favorites.has(anime.id)) {
+    const removing = favorites.has(anime.id);
+    const version = authVersion;
+    favoriteSaving = true;
+    btn.disabled = true;
+    try {
+        const res = await authFetch(removing ? `/api/favorites/${anime.id}` : "/api/favorites", {
+            method: removing ? "DELETE" : "POST",
+            ...(removing ? {} : { body: JSON.stringify(animeDetails(anime)) }),
+        });
+        if (version !== authVersion) return;
+        if (res.status === 401) {
+            await setAuthState(null);
+            requireFavoriteAccount();
+            return;
+        }
+        if (!res.ok) throw new Error("Save failed");
+        $("storage-notice").hidden = true;
+    } catch {
+        if (version === authVersion) storageNotice("Couldn't save your favorite. Please try again.");
+        return;
+    } finally {
+        favoriteSaving = false;
+        btn.disabled = false;
+    }
+    if (removing) {
         favorites.delete(anime.id);
         favoriteDetails.delete(anime.id);
     } else {
         favorites.add(anime.id);
         favoriteDetails.set(anime.id, animeDetails(anime));
     }
-    saveFavorites();
     renderFavoriteCount();
     if (view === "favorites") {
         render();
@@ -402,11 +446,20 @@ function showAuthError(message = "") {
     $("auth-error").hidden = !message;
 }
 
-function setAuthState(username) {
+async function setAuthState(username) {
+    currentUsername = username || null;
+    const version = ++authVersion;
+    favorites.clear();
+    favoriteDetails.clear();
+    favoritesReady = false;
+    $("storage-notice").hidden = true;
     const loggedIn = Boolean(username);
     if (loggedIn) $("account-name").textContent = username;
     $("account").hidden = !loggedIn;
     $("login-btn").hidden = loggedIn;
+    if (!loggedIn && view === "favorites") view = "all";
+    render();
+    if (loggedIn) await loadFavorites(version);
 }
 
 function setAuthMode(mode) {
@@ -517,7 +570,7 @@ async function submitAuth(event) {
             const error = await postAuth("/api/auth/reset-password", { token: resetToken, password });
             if (error) return showAuthError(error);
             resetToken = "";
-            setAuthState(null);
+            await setAuthState(null);
             setAuthMode("login");
             showAuthNotice("Password updated. Log in with your new password.");
             return;
@@ -535,8 +588,8 @@ async function submitAuth(event) {
         }
         const loginError = await postCredentials("/api/auth/login", username, password);
         if (loginError) return showAuthError(loginError);
-        setAuthState(username);
         closeAuthModal();
+        await setAuthState(username);
     } catch {
         showAuthError("Could not reach the server. Please try again.");
     } finally {
@@ -545,8 +598,13 @@ async function submitAuth(event) {
 }
 
 async function logout() {
-    try { await authFetch("/api/auth/logout", { method: "POST" }); } catch {}
-    setAuthState(null);
+    try {
+        const res = await authFetch("/api/auth/logout", { method: "POST" });
+        if (!res.ok) throw new Error("Logout failed");
+        await setAuthState(null);
+    } catch {
+        storageNotice("Couldn't log out. Please try again.");
+    }
 }
 
 // Reflect any existing session on load.
@@ -555,7 +613,7 @@ async function refreshAuthState() {
         const res = await authFetch("/api/auth/me");
         if (res.ok) return setAuthState((await res.json()).username);
     } catch {}
-    setAuthState(null);
+    await setAuthState(null);
 }
 
 $("login-btn").onclick = openAuthModal;

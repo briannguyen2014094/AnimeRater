@@ -63,6 +63,9 @@ def initialize_database(database_path=DATABASE_PATH):
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
         if "email" not in columns:
             connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        favorite_columns = {row["name"] for row in connection.execute("PRAGMA table_info(favorites)")}
+        if "details" not in favorite_columns:
+            connection.execute("ALTER TABLE favorites ADD COLUMN details TEXT NOT NULL DEFAULT '{}'")
 
 
 if __name__ == "__main__":
