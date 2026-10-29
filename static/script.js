@@ -381,7 +381,8 @@ document.querySelectorAll(".bg-option").forEach((btn) => {
 });
 /* ---- Authentication UI ---- */
   const authModal = $("auth-modal");
-  let authMode = "login"; // "login" | "signup"
+  let authMode = "login";
+  let resetToken = "";
   
   // Backend requires this header on POSTs; cookies carry the session.
 async function authFetch(path, options = {}) {
@@ -411,12 +412,34 @@ function setAuthState(username) {
 function setAuthMode(mode) {
     authMode = mode;
     const signup = mode === "signup";
-    $("auth-title").textContent = signup ? "Sign up" : "Log in";
-    $("auth-submit").textContent = signup ? "Sign up" : "Log in";
-    $("auth-switch-text").textContent = signup ? "Already have an account?" : "Don't have an account?";
+    const forgot = mode === "forgot";
+    const reset = mode === "reset";
+    const email = mode === "email";
+    const titles = { login: "Log in", signup: "Sign up", forgot: "Forgot password", reset: "Reset password", email: "Recovery email" };
+    $("auth-form").reset();
+    $("auth-title").textContent = titles[mode];
+    $("auth-submit").textContent = forgot ? "Send reset link" : email ? "Save recovery email" : titles[mode];
+    $("auth-username-field").hidden = reset || email;
+    $("auth-username").required = !reset && !email;
+    $("auth-email-field").hidden = !signup && !email;
+    $("auth-email").required = signup || email;
+    $("auth-password-field").hidden = forgot;
+    $("auth-password").required = !forgot;
+    $("auth-password").minLength = signup || reset ? 12 : 1;
+    $("auth-confirm-field").hidden = !reset;
+    $("auth-confirm").required = reset;
+    $("auth-forgot-btn").hidden = mode !== "login";
+    $("auth-switch-text").textContent = mode === "login" ? "Don't have an account?" : "Back to";
     $("auth-switch-btn").textContent = signup ? "Log in" : "Sign up";
-    $("auth-password").setAttribute("autocomplete", signup ? "new-password" : "current-password");
+    if (forgot || reset || email) $("auth-switch-btn").textContent = "Log in";
+    $("auth-password").setAttribute("autocomplete", signup || reset ? "new-password" : "current-password");
+    $("auth-notice").hidden = true;
     showAuthError();
+}
+
+function showAuthNotice(message) {
+    $("auth-notice").textContent = message;
+    $("auth-notice").hidden = false;
 }
 
 function openAuthModal() {
@@ -428,15 +451,18 @@ function openAuthModal() {
 
 function closeAuthModal() {
     authModal.classList.add("hidden");
+    $("auth-form").reset();
+    resetToken = "";
     showAuthError();
 }
 
 // Mirror the backend's validation rules so users get instant feedback.
 function credentialError(username, password) {
-    if (!/^[A-Za-z0-9_]{3,30}$/.test(username)) {
+    if (!["reset", "email"].includes(authMode) && !/^[A-Za-z0-9_]{3,30}$/.test(username)) {
         return "Username must be 3–30 characters: letters, numbers, or underscores.";
     }
-    if (authMode === "signup" && password.length < 12) {
+    if (authMode === "forgot") return "";
+    if (["signup", "reset"].includes(authMode) && password.length < 12) {
         return "Password must be at least 12 characters.";
     }
     if (password.length < 1 || password.length > 128) {
@@ -446,15 +472,21 @@ function credentialError(username, password) {
 }
 
 // POST credentials to one of the auth endpoints; returns an error string or "".
-async function postCredentials(path, username, password) {
+async function postCredentials(path, username, password, email) {
+    return postAuth(path, { username, password, email });
+}
+
+async function postAuth(path, body) {
     const res = await authFetch(path, {
         method: "POST",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(body),
     });
     if (res.ok) return "";
-    if (res.status === 401) return "Invalid username or password.";
     if (res.status === 409) return "That username is already taken.";
-    try { return (await res.json()).detail || "Something went wrong. Please try again."; }
+    try {
+        const detail = (await res.json()).detail;
+        return typeof detail === "string" ? detail : "Please check the fields and try again.";
+    }
     catch { return "Something went wrong. Please try again."; }
 }
 
@@ -465,12 +497,40 @@ async function submitAuth(event) {
 
     const invalid = credentialError(username, password);
     if (invalid) return showAuthError(invalid);
+    if (["signup", "email"].includes(authMode) && !$("auth-email").checkValidity()) {
+        return showAuthError("Please enter a valid recovery email.");
+    }
+    if (authMode === "reset" && password !== $("auth-confirm").value) {
+        return showAuthError("The passwords do not match.");
+    }
 
     $("auth-submit").disabled = true;
     showAuthError();
     try {
+        if (authMode === "forgot") {
+            const error = await postAuth("/api/auth/forgot-password", { username });
+            if (error) return showAuthError(error);
+            showAuthNotice("If this account has a recovery email, a reset link will be sent. Check your inbox and spam folder. Links expire in 30 minutes; wait a minute before requesting another.");
+            return;
+        }
+        if (authMode === "reset") {
+            const error = await postAuth("/api/auth/reset-password", { token: resetToken, password });
+            if (error) return showAuthError(error);
+            resetToken = "";
+            setAuthState(null);
+            setAuthMode("login");
+            showAuthNotice("Password updated. Log in with your new password.");
+            return;
+        }
+        if (authMode === "email") {
+            const error = await postAuth("/api/auth/recovery-email", { email: $("auth-email").value.trim(), password });
+            if (error) return showAuthError(error);
+            $("auth-password").value = "";
+            showAuthNotice("Recovery email saved.");
+            return;
+        }
         if (authMode === "signup") {
-            const signupError = await postCredentials("/api/auth/register", username, password);
+            const signupError = await postCredentials("/api/auth/register", username, password, $("auth-email").value.trim());
             if (signupError) return showAuthError(signupError);
         }
         const loginError = await postCredentials("/api/auth/login", username, password);
@@ -503,6 +563,22 @@ $("logout-btn").onclick = logout;
 $("auth-close").onclick = closeAuthModal;
 $("auth-form").onsubmit = submitAuth;
 $("auth-switch-btn").onclick = () => setAuthMode(authMode === "login" ? "signup" : "login");
+$("auth-forgot-btn").onclick = () => { setAuthMode("forgot"); $("auth-username").focus(); };
+$("recovery-email-btn").onclick = () => {
+    setAuthMode("email");
+    authModal.classList.remove("hidden");
+    $("auth-email").focus();
+};
 authModal.onclick = (e) => { if (e.target === authModal) closeAuthModal(); };
 
 refreshAuthState();
+
+// Fragments are not sent to the server or included in HTTP referrers.
+const resetParams = new URLSearchParams(window.location.hash.slice(1));
+if (resetParams.has("reset_token")) {
+    resetToken = resetParams.get("reset_token");
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    setAuthMode("reset");
+    authModal.classList.remove("hidden");
+    $("auth-password").focus();
+}

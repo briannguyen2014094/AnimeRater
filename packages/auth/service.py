@@ -13,11 +13,11 @@ password_hasher = PasswordHash.recommended()
 DUMMY_PASSWORD_HASH = password_hasher.hash(secrets.token_urlsafe(32))
 
 
-def register_user(connection, username, password):
+def register_user(connection, username, password, email=None):
     password_hash = password_hasher.hash(password)
     cursor = connection.execute(
-        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-        (username, password_hash),
+        "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+        (username, password_hash, email),
     )
     return {"id": cursor.lastrowid, "username": username}
 
@@ -67,3 +67,44 @@ def get_session_user(connection, token):
         (hash_token(token), int(time.time())),
     ).fetchone()
     return dict(user) if user else None
+
+
+RESET_SECONDS = 30 * 60
+RESET_COOLDOWN_SECONDS = 60
+
+
+def create_password_reset(connection, username):
+    now = int(time.time())
+    # Serialize issuance so concurrent requests cannot bypass the cooldown.
+    connection.execute("BEGIN IMMEDIATE")
+    connection.execute("DELETE FROM password_resets WHERE expires_at <= ?", (now,))
+    user = connection.execute(
+        "SELECT id, email FROM users WHERE username = ?", (username,),
+    ).fetchone()
+    if not user or not user["email"]:
+        return None
+    previous = connection.execute(
+        "SELECT requested_at FROM password_resets WHERE user_id = ?", (user["id"],),
+    ).fetchone()
+    if previous and previous["requested_at"] > now - RESET_COOLDOWN_SECONDS:
+        return None
+    token = secrets.token_urlsafe(32)
+    connection.execute(
+        "INSERT OR REPLACE INTO password_resets (token_hash, user_id, expires_at, requested_at) VALUES (?, ?, ?, ?)",
+        (hash_token(token), user["id"], now + RESET_SECONDS, now),
+    )
+    return user["email"], token
+
+
+def reset_password(connection, token, password):
+    # Hash before taking the write lock, then atomically consume the token.
+    password_hash = password_hasher.hash(password)
+    row = connection.execute(
+        "DELETE FROM password_resets WHERE token_hash = ? AND expires_at > ? RETURNING user_id",
+        (hash_token(token), int(time.time())),
+    ).fetchone()
+    if not row:
+        return False
+    connection.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, row["user_id"]))
+    connection.execute("DELETE FROM sessions WHERE user_id = ?", (row["user_id"],))
+    return True

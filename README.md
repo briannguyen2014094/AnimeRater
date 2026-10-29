@@ -9,9 +9,10 @@ and JavaScript. Anime data comes from AniList.
 
 - Browse and search anime, and view details.
 - Save favorites in the browser.
-- Create accounts and manage login sessions through the API.
+- Create accounts and log in through the website or API.
+- Recover passwords through emailed, single-use links that expire after 30 minutes.
 
-Login and signup forms, account-based favorites, and ratings are not built yet.
+Account-based favorites and ratings are not built yet.
 
 ## Requirements
 
@@ -50,6 +51,12 @@ If port 8000 is busy, add `--port 8001` to the command and open
 | Setting | Default | Use |
 | --- | --- | --- |
 | `SESSION_COOKIE_SECURE` | `true` | Requires HTTPS for login cookies. Set to `false` only for local HTTP use. |
+| `APP_BASE_URL` | Unset | Public site URL for reset links, for example `https://anime.example`. Use HTTPS in production. |
+| `SMTP_HOST` | Unset | SMTP server used to send recovery emails with STARTTLS. |
+| `SMTP_PORT` | `587` | SMTP server port. |
+| `SMTP_FROM` | Unset | Sender address allowed by your SMTP provider. |
+| `SMTP_USERNAME` | Unset | SMTP login, if the server requires authentication. |
+| `SMTP_PASSWORD` | Unset | SMTP password or provider app password. |
 
 Set this variable in your terminal or hosting settings. The app does not load
 `.env` files automatically. The local `run.py` script sets it to `false` for its
@@ -58,6 +65,32 @@ server process only; use this script for local development.
 The app creates `data/animerater.db` on startup. This file stores users, sessions,
 and the favorites table. It is ignored by Git, so each developer has their own
 local database. The website still saves favorites in the browser.
+
+### Password recovery
+
+Set `APP_BASE_URL`, `SMTP_HOST`, and `SMTP_FROM` plus any SMTP credentials before
+using password recovery. Use your hosting provider's secret settings or local
+environment variables for credentials; never commit credentials or database files.
+No SMTP credentials are needed to browse, register, or log in.
+
+Signup asks for a recovery email. Existing users can log in and select **Recovery
+email** to add or change theirs by confirming their current password. Accounts
+without a saved recovery email cannot use email recovery. Existing databases are
+migrated automatically on startup without deleting users.
+
+Select **Forgot password?** in the login dialog and enter your username. The
+response does not disclose whether the account exists or has a recovery email.
+Open the emailed link and enter and confirm a new password (12–128 characters).
+Resetting a password signs out all devices. A new reset link invalidates the old
+one; requests for the same account are limited to once per minute. Email delivery
+failures are logged without reset links or credentials; check your SMTP settings
+if mail does not arrive. Delivery runs in the app process; interrupted deliveries
+can be retried after the cooldown.
+
+Passwords are stored as salted Argon2id hashes, and session and recovery tokens
+are stored as SHA-256 hashes. Plaintext passwords and recovery tokens are never
+stored in the database. Reset links use URL fragments, which are removed from
+the browser address when opened and are not sent in HTTP requests or referrers.
 
 ## Testing
 
@@ -107,8 +140,9 @@ and request formats. Authentication POST requests require the header
 - Run a single app instance with SQLite on local, persistent storage.
 - Use a production server setup without `--reload`.
 
-Login rate limits and password recovery are not built yet. Add login rate limits
-before opening account registration to the public.
+Login rate limits are not built yet. Add login rate limits and deployment-level
+request limits before opening account registration to the public. Recovery email
+requests have a per-account cooldown; they do not replace global abuse controls.
 
 ## License
 

@@ -3,11 +3,15 @@
 import os
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
 from app.database import get_connection
 from packages.auth import service
-from packages.auth.models import LoginRequest, PublicUser, RegisterRequest
+from packages.auth.mail import reset_mail_settings, send_password_reset
+from packages.auth.models import (
+    ForgotPasswordRequest, LoginRequest, PublicUser, RecoveryEmailRequest,
+    RegisterRequest, ResetPasswordRequest,
+)
 
 
 COOKIE_NAME = "animerater_session"
@@ -35,7 +39,7 @@ router = APIRouter(
 @router.post("/register", response_model=PublicUser, status_code=201)
 def register(body: RegisterRequest, connection=Depends(get_database)):
     try:
-        return service.register_user(connection, body.username, body.password.get_secret_value())
+        return service.register_user(connection, body.username, body.password.get_secret_value(), body.email)
     except sqlite3.IntegrityError as exc:
         existing = connection.execute(
             "SELECT id FROM users WHERE username = ?", (body.username,),
@@ -76,4 +80,33 @@ def me(user=Depends(get_current_user)):
 @router.post("/logout", status_code=204)
 def logout(request: Request, response: Response, connection=Depends(get_database)):
     service.delete_session(connection, request.cookies.get(COOKIE_NAME))
+    response.delete_cookie(COOKIE_NAME, path="/")
+
+
+@router.post("/recovery-email", status_code=204)
+def recovery_email(body: RecoveryEmailRequest, user=Depends(get_current_user), connection=Depends(get_database)):
+    if service.authenticate_user(connection, user["username"], body.password.get_secret_value()) is None:
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    connection.execute("UPDATE users SET email = ? WHERE id = ?", (body.email, user["id"]))
+    connection.execute("DELETE FROM password_resets WHERE user_id = ?", (user["id"],))
+
+
+@router.post("/forgot-password", status_code=202)
+def forgot_password(body: ForgotPasswordRequest, background_tasks: BackgroundTasks, connection=Depends(get_database)):
+    try:
+        reset_mail_settings()
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="Password recovery email is not configured. Please contact the site administrator.") from exc
+    reset = service.create_password_reset(connection, body.username)
+    if reset:
+        # Commit before scheduling delivery; the emailed token must already exist.
+        connection.commit()
+        background_tasks.add_task(send_password_reset, *reset)
+    return {"message": "If this account has a recovery email, a reset link will be sent. Check your inbox and spam folder."}
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password(body: ResetPasswordRequest, response: Response, connection=Depends(get_database)):
+    if not service.reset_password(connection, body.token.get_secret_value(), body.password.get_secret_value()):
+        raise HTTPException(status_code=400, detail="This reset link is invalid or expired. Request a new link.")
     response.delete_cookie(COOKIE_NAME, path="/")

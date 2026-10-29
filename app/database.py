@@ -46,6 +46,13 @@ def initialize_database(database_path=DATABASE_PATH):
 
             CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id);
 
+            CREATE TABLE IF NOT EXISTS password_resets (
+                token_hash TEXT PRIMARY KEY NOT NULL,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL,
+                requested_at INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS favorites (
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 anime_id INTEGER NOT NULL CHECK (anime_id > 0),
@@ -53,6 +60,9 @@ def initialize_database(database_path=DATABASE_PATH):
                 PRIMARY KEY (user_id, anime_id)
             );
         """)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
+        if "email" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN email TEXT")
 
 
 if __name__ == "__main__":

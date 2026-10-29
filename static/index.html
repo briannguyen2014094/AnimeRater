@@ -11,6 +11,7 @@
       <button id="login-btn" type="button" aria-haspopup="dialog">Log in</button>
       <span id="account" class="account" hidden>
         <span class="account-name">Signed in as <strong id="account-name"></strong></span>
+        <button id="recovery-email-btn" type="button">Recovery email</button>
         <button id="logout-btn" type="button">Log out</button>
       </span>
       <button id="settings-btn" type="button" aria-haspopup="dialog" aria-label="Settings">⚙️
@@ -40,21 +41,32 @@
         <h2 id="auth-title">Log in</h2>
   
         <form id="auth-form" novalidate>
-          <label class="field">
+          <label id="auth-username-field" class="field">
             <span>Username</span>
             <input id="auth-username" name="username" type="text" autocomplete="username"
                    minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+" required>
           </label>
-          <label class="field">
+          <label id="auth-email-field" class="field" hidden>
+            <span>Recovery email</span>
+            <input id="auth-email" name="email" type="email" autocomplete="email" maxlength="254">
+          </label>
+          <label id="auth-password-field" class="field">
             <span>Password</span>
             <input id="auth-password" name="password" type="password"
                    autocomplete="current-password" maxlength="128" required>
           </label>
+          <label id="auth-confirm-field" class="field" hidden>
+            <span>Confirm new password</span>
+            <input id="auth-confirm" name="confirm-password" type="password"
+                   autocomplete="new-password" maxlength="128">
+          </label>
   
           <p id="auth-error" class="auth-error" role="alert" hidden></p>
+          <p id="auth-notice" role="status" hidden></p>
   
           <button id="auth-submit" type="submit">Log in</button>
         </form>
+        <button id="auth-forgot-btn" type="button" class="linkish">Forgot password?</button>
   
         <p class="auth-switch">
           <span id="auth-switch-text">Don't have an account?</span>
