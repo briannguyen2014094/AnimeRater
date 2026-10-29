@@ -379,3 +379,130 @@ document.addEventListener("keydown", (event) => {
 document.querySelectorAll(".bg-option").forEach((btn) => {
       btn.onclick = () => { applyTheme(btn.dataset.bg); saveTheme(btn.dataset.bg); };
 });
+/* ---- Authentication UI ---- */
+  const authModal = $("auth-modal");
+  let authMode = "login"; // "login" | "signup"
+  
+  // Backend requires this header on POSTs; cookies carry the session.
+async function authFetch(path, options = {}) {
+    return fetch(path, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "AnimeRater",
+            ...options.headers,
+        },
+    });
+}
+
+function showAuthError(message = "") {
+    $("auth-error").textContent = message;
+    $("auth-error").hidden = !message;
+}
+
+function setAuthState(username) {
+    const loggedIn = Boolean(username);
+    if (loggedIn) $("account-name").textContent = username;
+    $("account").hidden = !loggedIn;
+    $("login-btn").hidden = loggedIn;
+}
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const signup = mode === "signup";
+    $("auth-title").textContent = signup ? "Sign up" : "Log in";
+    $("auth-submit").textContent = signup ? "Sign up" : "Log in";
+    $("auth-switch-text").textContent = signup ? "Already have an account?" : "Don't have an account?";
+    $("auth-switch-btn").textContent = signup ? "Log in" : "Sign up";
+    $("auth-password").setAttribute("autocomplete", signup ? "new-password" : "current-password");
+    showAuthError();
+}
+
+function openAuthModal() {
+    $("auth-form").reset();
+    setAuthMode("login");
+    authModal.classList.remove("hidden");
+    $("auth-username").focus();
+}
+
+function closeAuthModal() {
+    authModal.classList.add("hidden");
+    showAuthError();
+}
+
+// Mirror the backend's validation rules so users get instant feedback.
+function credentialError(username, password) {
+    if (!/^[A-Za-z0-9_]{3,30}$/.test(username)) {
+        return "Username must be 3–30 characters: letters, numbers, or underscores.";
+    }
+    if (authMode === "signup" && password.length < 12) {
+        return "Password must be at least 12 characters.";
+    }
+    if (password.length < 1 || password.length > 128) {
+        return "Please enter your password.";
+    }
+    return "";
+}
+
+// POST credentials to one of the auth endpoints; returns an error string or "".
+async function postCredentials(path, username, password) {
+    const res = await authFetch(path, {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+    });
+    if (res.ok) return "";
+    if (res.status === 401) return "Invalid username or password.";
+    if (res.status === 409) return "That username is already taken.";
+    try { return (await res.json()).detail || "Something went wrong. Please try again."; }
+    catch { return "Something went wrong. Please try again."; }
+}
+
+async function submitAuth(event) {
+    event.preventDefault();
+    const username = $("auth-username").value.trim();
+    const password = $("auth-password").value;
+
+    const invalid = credentialError(username, password);
+    if (invalid) return showAuthError(invalid);
+
+    $("auth-submit").disabled = true;
+    showAuthError();
+    try {
+        if (authMode === "signup") {
+            const signupError = await postCredentials("/api/auth/register", username, password);
+            if (signupError) return showAuthError(signupError);
+        }
+        const loginError = await postCredentials("/api/auth/login", username, password);
+        if (loginError) return showAuthError(loginError);
+        setAuthState(username);
+        closeAuthModal();
+    } catch {
+        showAuthError("Could not reach the server. Please try again.");
+    } finally {
+        $("auth-submit").disabled = false;
+    }
+}
+
+async function logout() {
+    try { await authFetch("/api/auth/logout", { method: "POST" }); } catch {}
+    setAuthState(null);
+}
+
+// Reflect any existing session on load.
+async function refreshAuthState() {
+    try {
+        const res = await authFetch("/api/auth/me");
+        if (res.ok) return setAuthState((await res.json()).username);
+    } catch {}
+    setAuthState(null);
+}
+
+$("login-btn").onclick = openAuthModal;
+$("logout-btn").onclick = logout;
+$("auth-close").onclick = closeAuthModal;
+$("auth-form").onsubmit = submitAuth;
+$("auth-switch-btn").onclick = () => setAuthMode(authMode === "login" ? "signup" : "login");
+authModal.onclick = (e) => { if (e.target === authModal) closeAuthModal(); };
+
+refreshAuthState();
