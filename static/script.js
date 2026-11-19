@@ -18,6 +18,17 @@ let authVersion = 0;
 let favoritesReady = false;
 let favoriteSaving = false;
 let favoritesRequest = 0;
+const WATCHLIST_STATUSES = {
+    plan_to_watch: "Plan to Watch",
+    watching: "Watching",
+    completed: "Completed",
+    dropped: "Dropped",
+};
+const watchlist = new Map();
+const watchlistPending = new Set();
+let watchlistReady = false;
+let watchlistLoading = false;
+let watchlistError = false;
 
 const $ = (id) => document.getElementById(id);
 const grid = $("grid"), pageNum = document.querySelectorAll(".page"), prev = document.querySelectorAll(".prev"), next = document.querySelectorAll(".next"), modal = $("modal"), modalContent = $("modal-content");
@@ -110,12 +121,14 @@ function hasCatalogFilters() {
 function render() {
     const filtered = hasCatalogFilters();
     pagination.forEach((controls) => { controls.hidden = view !== "all"; });
-    grid.setAttribute("aria-busy", String(view === "ratings" ? ratingsLoading : loading));
+    grid.setAttribute("aria-busy", String(view === "watchlist" ? watchlistLoading : view === "ratings" ? ratingsLoading : loading));
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
     $("my-ratings").setAttribute("aria-pressed", String(view === "ratings"));
+    $("my-watchlist").setAttribute("aria-pressed", String(view === "watchlist"));
     $("ratings-controls").hidden = view !== "ratings";
     $("catalog-filters").hidden = view !== "all";
+    $("search-bar").hidden = view === "watchlist";
     $("clear-filters").disabled = !filtered;
     $("search").placeholder = view === "ratings" ? "Search your rated anime..." : "Search anime...";
     $("ratings-status").textContent = view === "ratings" && !ratingsLoading && !ratingsError && ratingsReady
@@ -124,6 +137,10 @@ function render() {
     pageNum.forEach((label) => { label.textContent = `Page ${page}`; });
     prev.forEach((button) => { button.disabled = loading || page <= 1; });
     next.forEach((button) => { button.disabled = loading || !hasMore; });
+    if (view === "watchlist") {
+        renderWatchlist();
+        return;
+    }
     visibleAnime = view === "favorites"
         ? [...favorites].map((id) => favoriteDetails.get(id) || { id, title: `Saved anime #${id}`, unresolved: true })
         : view === "ratings" ? filteredRatings() : animeList;
@@ -176,7 +193,11 @@ function render() {
         }
         return;
     }
-    grid.innerHTML = visibleAnime.map((a, i) => `
+    grid.innerHTML = visibleAnime.map(renderAnimeCard).join("");
+}
+
+function renderAnimeCard(a, i) {
+    return `
         <article class="card" onclick="openModal(${i})">
           <div class="poster">
             ${a.image_url ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.title)}" loading="lazy">` : ""}
@@ -186,10 +207,72 @@ function render() {
           <div class="card-body">
             <h3><button class="anime-title" id="anime-${ratingId(a)}" type="button" onclick="event.stopPropagation(); openModal(${i})">${escapeHtml(a.title)}</button></h3>
             <p class="personal-rating">Your rating: ${escapeHtml(cardRating(a))}</p>
-            <p>${a.unresolved ? "Anime details are unavailable." : episodeLabel(a)}</p>
+            <p>${view === "watchlist" ? progressLabel(a) : a.unresolved ? "Anime details are unavailable." : episodeLabel(a)}</p>
           </div>
         </article>
-    `).join("");
+    `;
+}
+
+function progressLabel(entry) {
+    const { episodes_watched: count, episodes: total } = entry;
+    return total == null ? `${count} watched` : `${count} / ${total} episodes`;
+}
+
+function renderWatchlist() {
+    visibleAnime = [];
+    if (watchlistLoading || !watchlistReady) {
+        grid.innerHTML = watchlistLoading
+            ? '<p class="empty-state" role="status">Loading your watchlist…</p>'
+            : '<div class="empty-state"><p role="alert">Couldn’t load your watchlist.</p><button id="watchlist-retry" type="button">Try again</button></div>';
+        if (!watchlistLoading) $("watchlist-retry").onclick = loadWatchlist;
+        return;
+    }
+    if (!watchlist.size) {
+        grid.innerHTML = '<div class="empty-state"><h2>Your watchlist is empty</h2><p>Open an anime and choose a status under Watchlist to start tracking it.</p><button id="browse-anime" type="button">Browse anime</button></div>';
+        $("browse-anime").onclick = () => { setView("all"); $("all-anime").focus(); };
+        return;
+    }
+    const entries = [...watchlist.values()].sort((a, b) => a.title.localeCompare(b.title));
+    grid.innerHTML = Object.entries(WATCHLIST_STATUSES).map(([status, label]) => {
+        const group = entries.filter((entry) => entry.status === status);
+        if (!group.length) return "";
+        const start = visibleAnime.length;
+        visibleAnime.push(...group);
+        return `<section class="watchlist-group" aria-labelledby="watchlist-${status}">
+            <h2 id="watchlist-${status}">${label}</h2>
+            <div class="grid">${group.map((anime, index) => renderAnimeCard(anime, start + index)).join("")}</div>
+        </section>`;
+    }).join("");
+}
+
+async function loadWatchlist() {
+    if (!currentUsername || watchlistLoading || watchlistReady) return;
+    const version = authVersion;
+    watchlistLoading = true;
+    watchlistError = false;
+    renderWatchlistState();
+    try {
+        const res = await authFetch("/api/watchlist");
+        if (version !== authVersion) return;
+        if (res.status === 401) return await setAuthState(null);
+        if (!res.ok) throw new Error("Watchlist unavailable");
+        const { data } = await res.json();
+        if (version !== authVersion) return;
+        for (const entry of data) watchlist.set(entry.anilist_id, entry);
+        watchlistReady = true;
+    } catch {
+        if (version === authVersion) watchlistError = true;
+    } finally {
+        if (version === authVersion) {
+            watchlistLoading = false;
+            renderWatchlistState();
+        }
+    }
+}
+
+function renderWatchlistState() {
+    if (view === "watchlist") render();
+    renderWatchlistEditor();
 }
 
 async function load(p, resetResults = false) {
@@ -240,15 +323,18 @@ async function load(p, resetResults = false) {
 
 function setView(selectedView) {
     if (selectedView === "favorites" && !requireFavoriteAccount()) return;
-    if (selectedView === "ratings" && !currentUsername) {
+    if (["ratings", "watchlist"].includes(selectedView) && !currentUsername) {
         openAuthModal();
-        showAuthNotice("Log in or sign up to see your ratings.");
+        showAuthNotice(selectedView === "ratings"
+            ? "Log in or sign up to see your ratings."
+            : "Log in or sign up to see your watchlist.");
         return;
     }
     view = selectedView;
     $("search").value = view === "ratings" ? ratingsQuery : activeQuery;
     if (selectedView === "ratings" && !ratingsReady) loadPersonalRatings(true);
     if (selectedView === "favorites" && !favoritesReady) loadFavorites();
+    if (selectedView === "watchlist") loadWatchlist();
     if (selectedView === "all" && activeQuery && !hasCatalogFilters()) {
         $("search").value = "";
         runSearch();
@@ -325,8 +411,145 @@ let synopsisToken = 0;
 let modalAnimeId = null;
 let modalAnime = null;
 let modalReturnId = null;
+let watchlistEditor = {};
 let ratingRequest = 0;
 let ratingState = {};
+
+function renderWatchlistEditor() {
+    const panel = $("modal-watchlist");
+    if (modalAnimeId === null || !panel) return;
+    const heading = "<h3>Watchlist</h3>";
+    if (!currentUsername) {
+        panel.innerHTML = heading + '<p>Log in to track this anime.</p><button id="watchlist-login" type="button">Log in</button>';
+        $("watchlist-login").onclick = openAuthModal;
+        return;
+    }
+    if (!validId(modalAnime.anilist_id)) {
+        panel.innerHTML = heading + "<p>Find this anime in the catalog to add it to your watchlist.</p>";
+        return;
+    }
+    if (!watchlistReady) {
+        panel.innerHTML = heading + (watchlistError
+            ? '<p role="alert">Couldn’t load your watchlist.</p><button id="watchlist-editor-retry" type="button">Try again</button>'
+            : '<p role="status">Loading your watchlist…</p>');
+        if (watchlistError) $("watchlist-editor-retry").onclick = loadWatchlist;
+        return;
+    }
+
+    const entry = watchlist.get(modalAnime.anilist_id);
+    const limit = entry?.episodes ?? Number.MAX_SAFE_INTEGER;
+    const busy = watchlistPending.has(modalAnime.anilist_id);
+    const disabled = busy ? "disabled" : "";
+    const status = watchlistEditor.status ?? entry?.status;
+    const count = watchlistEditor.count ?? entry?.episodes_watched;
+    panel.innerHTML = heading + `
+        <form id="watchlist-status-form">
+            <label for="watchlist-status-input">Status</label>
+            <div class="rating-controls">
+                <select id="watchlist-status-input" required ${disabled}>
+                    <option value="">Choose a status</option>
+                    ${Object.entries(WATCHLIST_STATUSES).map(([value, label]) =>
+                        `<option value="${value}" ${status === value ? "selected" : ""}>${label}</option>`
+                    ).join("")}
+                </select>
+                <button type="submit" ${disabled}>${entry ? "Save status" : "Add to watchlist"}</button>
+            </div>
+        </form>
+        ${entry ? `
+            <p>${progressLabel(entry)}</p>
+            <form id="watchlist-progress-form" novalidate>
+                <label for="watchlist-count">Episodes watched</label>
+                <div class="rating-controls">
+                    <input id="watchlist-count" type="number" min="0" max="${limit}" step="1" required
+                        value="${escapeHtml(count)}" ${disabled}>
+                    <button type="submit" ${disabled}>Save count</button>
+                    <button id="watchlist-increment" type="button" ${busy || entry.episodes_watched >= limit ? "disabled" : ""}>+1 episode</button>
+                </div>
+            </form>
+            <button id="watchlist-remove" type="button" ${disabled}>Remove from watchlist</button>
+        ` : ""}
+        <p role="status">${escapeHtml(busy ? "Saving…" : watchlistEditor.message)}</p>
+        <p class="auth-error" role="alert" ${watchlistEditor.error ? "" : "hidden"}>${escapeHtml(watchlistEditor.error)}</p>
+    `;
+    $("watchlist-status-form").onsubmit = (event) => {
+        event.preventDefault();
+        const status = $("watchlist-status-input").value;
+        saveWatchlist("status", { status }, "watchlist-status-input");
+    };
+    if (!entry) return;
+    $("watchlist-progress-form").onsubmit = (event) => {
+        event.preventDefault();
+        const input = $("watchlist-count");
+        const count = input.valueAsNumber;
+        if (!Number.isSafeInteger(count) || count < 0 || count > limit) {
+            const error = entry.episodes == null
+                ? "Enter a nonnegative whole number."
+                : `Enter a whole number from 0 to ${limit}.`;
+            Object.assign(watchlistEditor, { count: input.value, error, message: "" });
+            renderWatchlistEditor();
+            $("watchlist-count").focus();
+            return;
+        }
+        saveWatchlist("count", { episodes_watched: count }, "watchlist-count");
+    };
+    $("watchlist-increment").onclick = () => saveWatchlist("increment", null, "watchlist-increment");
+    $("watchlist-remove").onclick = () => saveWatchlist("remove", null, "watchlist-status-input");
+}
+
+const WATCHLIST_ACTIONS = {
+    status: ["PUT", "", "Watchlist status saved."],
+    count: ["PUT", "/progress", "Episode count saved."],
+    increment: ["POST", "/progress", "Episode added."],
+    remove: ["DELETE", "", "Removed from your watchlist."],
+};
+
+async function saveWatchlist(action, body, focusId) {
+    const id = modalAnime?.anilist_id;
+    if (!currentUsername || !watchlistReady || !validId(id) || watchlistPending.has(id)) return;
+    const version = authVersion;
+    const editor = watchlistEditor;
+    const [method, suffix, message] = WATCHLIST_ACTIONS[action];
+    Object.assign(editor, {
+        status: $("watchlist-status-input").value,
+        count: $("watchlist-count")?.value,
+        error: "",
+        message: "",
+    });
+    watchlistPending.add(id);
+    renderWatchlistEditor();
+    try {
+        const res = await authFetch(`/api/watchlist/${id}${suffix}`, {
+            method,
+            ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+        if (version !== authVersion) return;
+        if (res.status === 401) return await setAuthState(null);
+        if (!res.ok) {
+            const failure = await res.json();
+            throw new Error(typeof failure.detail === "string" ? failure.detail : "Check your watchlist update.");
+        }
+        const entry = action === "remove" ? null : await res.json();
+        if (version !== authVersion) return;
+        if (entry) watchlist.set(id, entry);
+        else watchlist.delete(id);
+        Object.assign(editor, { status: undefined, count: undefined, message });
+        if (view === "watchlist") render();
+    } catch (error) {
+        editor.error = error instanceof TypeError ? "Couldn’t save your watchlist. Try again." : error.message;
+    } finally {
+        if (version === authVersion) {
+            watchlistPending.delete(id);
+            if (modalAnime?.anilist_id === id && modalAnimeId !== null) {
+                renderWatchlistEditor();
+                if (editor === watchlistEditor && document.activeElement === document.body) {
+                    const control = $(focusId);
+                    (control && !control.disabled ? control : $("watchlist-count") || $("watchlist-status-input")).focus();
+                }
+            }
+        }
+    }
+}
+
 const RATING_LABELS = ["Masterpiece", "Great", "Very Good", "Good", "Fine", "Average", "Bad", "Very Bad", "Horrible", "Appalling"];
 
 function renderRating() {
@@ -429,7 +652,7 @@ async function saveRating(removing) {
 function closeAnimeModal() {
     modal.classList.add("hidden");
     modalAnimeId = null;
-    ($(modalReturnId) || $(view === "ratings" ? "my-ratings" : view === "favorites" ? "favorites" : "all-anime")).focus();
+    ($(modalReturnId) || $({ ratings: "my-ratings", favorites: "favorites", watchlist: "my-watchlist" }[view] || "all-anime")).focus();
     ++ratingRequest;
     ++synopsisToken;
 }
@@ -466,6 +689,7 @@ async function loadSynopsis(a) {
 window.openModal = (i) => {
     const a = visibleAnime[i];
     modalAnime = a;
+    watchlistEditor = {};
     modalReturnId = `anime-${ratingId(a)}`;
     modalAnimeId = ratingId(a);
     const genres = a.genres || [];
@@ -488,6 +712,7 @@ window.openModal = (i) => {
             </div>
         </div>
         <section id="modal-rating" class="modal-rating" aria-label="Your rating"></section>
+        <section id="modal-watchlist" class="modal-rating modal-watchlist" aria-label="Watchlist"></section>
         <div class="modal-synopsis">
             <h3>Synopsis</h3>
             <p id="modal-synopsis-text">${escapeHtml(a.synopsis || pendingSynopsis)}</p>
@@ -496,6 +721,8 @@ window.openModal = (i) => {
     modal.classList.remove("hidden");
     $("close").focus();
     loadRating();
+    renderWatchlistEditor();
+    if (validId(a.anilist_id)) loadWatchlist();
     loadSynopsis(a);
 };
 
@@ -504,7 +731,7 @@ modal.onclick = (e) => { if (e.target === modal) closeAnimeModal(); };
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.classList.contains("hidden")) closeAnimeModal();
     if (event.key === "Tab" && !modal.classList.contains("hidden") && authModal.classList.contains("hidden")) {
-        const controls = [...modal.querySelectorAll('button:not(:disabled), select:not(:disabled)')];
+        const controls = [...modal.querySelectorAll('button:not(:disabled), select:not(:disabled), input:not(:disabled)')];
         const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -515,6 +742,7 @@ next.forEach((button) => { button.onclick = () => load(page + 1); });
 $("all-anime").onclick = () => setView("all");
 $("favorites").onclick = () => setView("favorites");
 $("my-ratings").onclick = () => setView("ratings");
+$("my-watchlist").onclick = () => setView("watchlist");
 $("ratings-sort").onchange = () => { ratingsSort = $("ratings-sort").value; render(); };
 
 function runSearch() {
@@ -605,7 +833,14 @@ async function setAuthState(username) {
     currentUsername = username || null;
     const version = ++authVersion;
     resetRatings();
+    watchlist.clear();
+    watchlistPending.clear();
+    watchlistReady = false;
+    watchlistLoading = false;
+    watchlistError = false;
+    watchlistEditor = {};
     if (modalAnimeId !== null) loadRating();
+    renderWatchlistEditor();
     favorites.clear();
     favoriteDetails.clear();
     favoritesReady = false;
@@ -616,7 +851,13 @@ async function setAuthState(username) {
     $("login-btn").hidden = loggedIn;
     if (!loggedIn && view !== "all") view = "all";
     render();
-    if (loggedIn) await Promise.all([loadFavorites(version), loadPersonalRatings(view === "ratings")]);
+    if (loggedIn) {
+        await Promise.all([
+            loadFavorites(version),
+            loadPersonalRatings(view === "ratings"),
+            view === "watchlist" || (modalAnimeId !== null && validId(modalAnime.anilist_id)) ? loadWatchlist() : null,
+        ]);
+    }
 }
 
 function setAuthMode(mode) {

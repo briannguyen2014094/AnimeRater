@@ -343,6 +343,9 @@ class AniListClient:
         self._cache_put(cache_key, details)
         return details
     
+anilist = AniListClient()
+
+
 if __name__ == "__main__":
     # debugging
     client = AniListClient()

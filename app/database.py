@@ -61,6 +61,16 @@ def initialize_database(database_path=DATABASE_PATH):
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, anime_id)
             );
+
+            CREATE TABLE IF NOT EXISTS watchlist (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                anime_id INTEGER NOT NULL CHECK (anime_id > 0),
+                status TEXT NOT NULL CHECK (status IN ('plan_to_watch', 'watching', 'completed', 'dropped')),
+                episodes_watched INTEGER NOT NULL DEFAULT 0
+                    CHECK (episodes_watched BETWEEN 0 AND 9007199254740991),
+                details TEXT NOT NULL,
+                PRIMARY KEY (user_id, anime_id)
+            );
         """)
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
         if "email" not in columns:
