@@ -37,34 +37,17 @@ def _retry_after_seconds(header: str | None) -> float:
     except ValueError:
         return DEFAULT_RETRY_AFTER_SECONDS
 
-TOP_ANIME_QUERY = """
-query GetTopAnime($page: Int, $perPage: Int) {
+CATALOG_ANIME_QUERY = """
+query CatalogAnime(
+    $page: Int, $perPage: Int, $search: String, $sort: [MediaSort],
+    $genre: String, $format: MediaFormat, $yearStart: FuzzyDateInt, $yearEnd: FuzzyDateInt
+) {
     Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, sort: SCORE_DESC, isAdult: false) {
-            id
-            idMal
-            title {
-                english
-                romaji
-            }
-            episodes
-            averageScore
-            coverImage {
-                large
-            }
-            genres
-        }
-        pageInfo {
-            hasNextPage
-        }
-    }
-}
-"""
-
-SEARCH_ANIME_QUERY = """
-query SearchAnime($search: String, $page: Int, $perPage: Int) {
-    Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, search: $search, sort: SEARCH_MATCH, isAdult: false) {
+        media(
+            type: ANIME, isAdult: false, search: $search, sort: $sort,
+            genre: $genre, format: $format,
+            startDate_greater: $yearStart, startDate_lesser: $yearEnd
+        ) {
             id
             idMal
             title {
@@ -187,26 +170,6 @@ class AniListClient:
             "genres": raw.get("genres") or [],
         }
         
-    @staticmethod
-    def _verify_payload(payload: dict[str, Any]) -> bool:
-        if "errors" in payload:
-            for err in payload.get("errors", []):
-                print(f"[WARNING] AniList GraphQL Error: {err.get('message')}")
-            return False
-
-        media = payload.get("data", {}).get("Page", {}).get("media", [])
-        return len(media) > 0
-        
-    def _normalize_payload(self, payload: dict[str, Any], label: str = "") -> list[dict[str, Any]]:
-        if label:
-            print(f"Normalized payload for {label}")
-
-        if not self._verify_payload(payload):
-            return []
-
-        media_items = payload.get("data", {}).get("Page", {}).get("media", [])
-        return [self._normalize_anime(item) for item in media_items]
-        
     def _post(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         response = self.client.post("", json={"query": query, "variables": variables})
         if response.status_code == 429:
@@ -246,8 +209,6 @@ class AniListClient:
             return value
 
     def _cache_put(self, key: tuple[Any, ...], value: Any) -> None:
-        # A GraphQL error and a no-match both normalize to an empty result,
-        # so empties are never cached - a transient failure must not stick around
         if not value:
             return
 
@@ -276,10 +237,10 @@ class AniListClient:
         offset = ((page - 1) % pages_per_chunk) * limit
         return anilist_page, fetch_size, offset
 
-    def _fetch_chunk(self, kind: str, query: str, variables: dict[str, Any],
+    def _fetch_chunk(self, variables: dict[str, Any],
                      anilist_page: int, fetch_size: int) -> dict[str, Any]:
         """Fetch, or reuse, the chunk of results that covers several displayed pages."""
-        cache_key = (kind, str(variables.get("search", "")), anilist_page, fetch_size)
+        cache_key = ("catalog", anilist_page, fetch_size, tuple(sorted(variables.items())))
         cached = self._cache_get(cache_key)
         if cached is not None:
             return cached
@@ -291,11 +252,13 @@ class AniListClient:
 
         request_variables = {**variables, "page": anilist_page, "perPage": fetch_size}
         try:
-            payload = self._post(query, request_variables)
+            payload = self._post(CATALOG_ANIME_QUERY, request_variables)
         except RateLimited as exc:
             return self._stale_or_raise(cache_key, exc.retry_after)
 
-        items = self._normalize_payload(payload, label=kind)
+        if payload.get("errors"):
+            raise RuntimeError("AniList could not load the catalog")
+        items = [self._normalize_anime(item) for item in payload["data"]["Page"]["media"]]
         chunk = {"items": items, "has_next_page": self._has_next_page(payload)}
         if items:
             self._cache_put(cache_key, chunk)
@@ -308,28 +271,41 @@ class AniListClient:
         has_next = offset + limit < len(items) or chunk["has_next_page"]
         return {"data": items[offset:offset + limit], "has_next_page": has_next}
 
-    def get_top_page(self, page: int = 1, limit: int = 15) -> dict[str, Any]:
-        """One displayed catalog page, served out of a larger cached chunk."""
+    def _get_catalog_page(self, variables: dict[str, Any], page: int, limit: int) -> dict[str, Any]:
         limit = max(1, min(limit, ANILIST_MAX_PER_PAGE))
         anilist_page, fetch_size, offset = self._chunk_geometry(page, limit)
-        chunk = self._fetch_chunk("top", TOP_ANIME_QUERY, {}, anilist_page, fetch_size)
+        chunk = self._fetch_chunk(variables, anilist_page, fetch_size)
         return self._slice_chunk(chunk, offset, limit)
+
+    def get_top_page(self, page: int = 1, limit: int = 15) -> dict[str, Any]:
+        """One displayed catalog page, served out of a larger cached chunk."""
+        return self._get_catalog_page({"sort": ("SCORE_DESC",)}, page, limit)
 
     def get_top_anime(self, page: int = 1, limit: int = 15) -> list[dict[str, Any]]:
         """Just the results, for callers that do not need the pagination flag."""
         return self.get_top_page(page=page, limit=limit)["data"]
 
-    def get_search_page(self, query: str, page: int = 1, limit: int = 15) -> dict[str, Any]:
-        """One displayed search page, served out of a larger cached chunk."""
-        if not query or not query.strip():
+    def get_search_page(
+        self, query: str, page: int = 1, limit: int = 15, *,
+        genre: str | None = None, year: int | None = None, media_format: str | None = None,
+    ) -> dict[str, Any]:
+        """Search by title, browse by filters, or combine both."""
+        search = (query or "").strip().casefold()
+        if not (search or genre or year or media_format):
             return {"data": [], "has_next_page": False}
 
-        limit = max(1, min(limit, ANILIST_MAX_PER_PAGE))
-        anilist_page, fetch_size, offset = self._chunk_geometry(page, limit)
-        # case and surrounding whitespace do not change the results, so they share one entry
-        variables = {"search": query.strip().casefold()}
-        chunk = self._fetch_chunk("search", SEARCH_ANIME_QUERY, variables, anilist_page, fetch_size)
-        return self._slice_chunk(chunk, offset, limit)
+        variables: dict[str, Any] = {"sort": ("SEARCH_MATCH" if search else "SCORE_DESC",)}
+        if search:
+            variables["search"] = search
+        if genre:
+            variables["genre"] = genre
+        if media_format:
+            variables["format"] = media_format
+        if year is not None:
+            # Fuzzy dates use YYYYMMDD. Include releases where only the year is known.
+            variables["yearStart"] = (year - 1) * 10000 + 1231
+            variables["yearEnd"] = (year + 1) * 10000
+        return self._get_catalog_page(variables, page, limit)
 
     def search_anime(self, query: str, page: int = 1, limit: int = 15) -> list[dict[str, Any]]:
         """Search AniList by title. Returns [] for a blank query or when nothing matches."""

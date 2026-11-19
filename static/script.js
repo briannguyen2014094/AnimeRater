@@ -9,6 +9,7 @@ let catalogError = false;
 let errorMessage = "";
 let activeQuery = "";
 let hasMore = true;
+let catalogRequest = 0;
 const PAGE_SIZE = 25;
 const favorites = new Set();
 const favoriteDetails = new Map();
@@ -21,6 +22,7 @@ let favoritesRequest = 0;
 const $ = (id) => document.getElementById(id);
 const grid = $("grid"), pageNum = document.querySelectorAll(".page"), prev = document.querySelectorAll(".prev"), next = document.querySelectorAll(".next"), modal = $("modal"), modalContent = $("modal-content");
 const pagination = document.querySelectorAll(".pagination-top, .pagination-bottom");
+const catalogFilters = { genre: $("filter-genre"), year: $("filter-year"), format: $("filter-format") };
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const validId = (id) => (typeof id === "number" || typeof id === "string") && String(id).trim() !== "" && Number.isSafeInteger(Number(id)) && Number(id) > 0;
 
@@ -101,13 +103,20 @@ function renderFavoriteCount() {
     $("favorites").textContent = `Favorites (${favorites.size})`;
 }
 
+function hasCatalogFilters() {
+    return Object.values(catalogFilters).some((control) => control.value);
+}
+
 function render() {
+    const filtered = hasCatalogFilters();
     pagination.forEach((controls) => { controls.hidden = view !== "all"; });
     grid.setAttribute("aria-busy", String(view === "ratings" ? ratingsLoading : loading));
     $("all-anime").setAttribute("aria-pressed", String(view === "all"));
     $("favorites").setAttribute("aria-pressed", String(view === "favorites"));
     $("my-ratings").setAttribute("aria-pressed", String(view === "ratings"));
     $("ratings-controls").hidden = view !== "ratings";
+    $("catalog-filters").hidden = view !== "all";
+    $("clear-filters").disabled = !filtered;
     $("search").placeholder = view === "ratings" ? "Search your rated anime..." : "Search anime...";
     $("ratings-status").textContent = view === "ratings" && !ratingsLoading && !ratingsError && ratingsReady
         ? `${filteredRatings().length} rated anime` : "";
@@ -134,9 +143,9 @@ function render() {
         return;
     }
     if (view === "all" && catalogError) {
-        const fallback = activeQuery ? "We couldn’t run that search. Please try again." : "We couldn’t load the catalog. Please try again.";
+        const fallback = activeQuery || filtered ? "We couldn’t load those results. Please try again." : "We couldn’t load the catalog. Please try again.";
         grid.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage || fallback)}</p><button id="retry" type="button">Try again</button></div>`;
-        $("retry").onclick = () => (activeQuery ? search(activeQuery, page) : load(page));
+        $("retry").onclick = () => load(page);
         return;
     }
     // While paging, keep the cards already on screen. Replacing them with a one-line
@@ -154,14 +163,16 @@ function render() {
         $("browse-anime").onclick = () => { setView("all"); $("all-anime").focus(); };
         return;
     }
-    if (view === "all" && activeQuery && !visibleAnime.length) {
-        // nothing on page 1 means the query found nothing
+    if (view === "all" && (activeQuery || filtered) && !visibleAnime.length) {
         if (page > 1) {
-            grid.innerHTML = '<div class="empty-state"><h2>No more results</h2><p>That was the last page for this search.</p><button id="search-back" type="button">Previous page</button></div>';
-            $("search-back").onclick = () => search(activeQuery, page - 1);
+            grid.innerHTML = '<div class="empty-state"><h2>No more results</h2><button id="search-back" type="button">Previous page</button></div>';
+            $("search-back").onclick = () => load(page - 1);
+        } else if (filtered) {
+            grid.innerHTML = '<div class="empty-state"><h2>No results</h2><p>No anime matched these filters. Try changing a filter or clearing them.</p><button id="empty-clear-filters" type="button">Clear filters</button></div>';
+            $("empty-clear-filters").onclick = () => { clearCatalogFilters(); $("filter-genre").focus(); };
         } else {
             grid.innerHTML = '<div class="empty-state"><h2>No results</h2><p>Nothing matched that search. Try a different title.</p><button id="clear-search" type="button">Clear search</button></div>';
-            $("clear-search").onclick = () => { $("search").value = ""; activeQuery = ""; load(1); };
+            $("clear-search").onclick = () => { $("search").value = ""; runSearch(); };
         }
         return;
     }
@@ -181,24 +192,33 @@ function render() {
     `).join("");
 }
 
-async function load(p) {
+async function load(p, resetResults = false) {
+    const request = ++catalogRequest;
+    const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
+    if (activeQuery) params.set("q", activeQuery);
+    for (const [name, control] of Object.entries(catalogFilters)) {
+        if (control.value) params.set(name, control.value);
+    }
+    const endpoint = activeQuery || hasCatalogFilters() ? "search" : "top";
+    if (p !== page || resetResults) scrollToTop();
+    page = p;
+    if (resetResults) animeList = [];
     loading = true;
     catalogError = false;
     errorMessage = "";
-    // only on an actual page change, so a refresh keeps the position the browser restored
-    if (p !== page) scrollToTop();
     render();
+    let responseError = "";
     try {
-        const res = await fetch(`/api/catalog/top?page=${p}&limit=${PAGE_SIZE}`);
+        const res = await fetch(`/api/catalog/${endpoint}?${params}`);
         if (!res.ok) {
-            errorMessage = await describeFailure(res);
-            throw new Error(errorMessage);
+            responseError = await describeFailure(res);
+            throw new Error(responseError);
         }
         const json = await res.json();
+        if (request !== catalogRequest) return;
         animeList = (Array.isArray(json.data) ? json.data : [])
             .filter((a) => a && validId(a.id) && typeof a.title === "string")
             .map(animeDetails);
-        page = p;
         hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
         for (const anime of animeList) {
             if (favorites.has(anime.id)) {
@@ -206,41 +226,15 @@ async function load(p) {
             }
         }
     } catch {
-        // a network failure has no server message, so the friendly fallback stands
+        if (request !== catalogRequest) return;
         catalogError = true;
+        hasMore = false;
+        errorMessage = responseError;
     } finally {
-        loading = false;
-        render();
-    }
-}
-
-async function search(q, p = 1) {
-    activeQuery = q;
-    loading = true;
-    catalogError = false;
-    errorMessage = "";
-    scrollToTop();
-    render();
-    try {
-        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}&page=${p}&limit=${PAGE_SIZE}`);
-        if (!res.ok) {
-            errorMessage = await describeFailure(res);
-            throw new Error(errorMessage);
+        if (request === catalogRequest) {
+            loading = false;
+            render();
         }
-        const json = await res.json();
-        animeList = (Array.isArray(json.data) ? json.data : [])
-            .filter((a) => a && validId(a.id) && typeof a.title === "string")
-            .map(animeDetails);
-        page = p;
-        // has_next_page comes straight from AniList's pageInfo; the length check is
-        // only a fallback for a response that does not carry it
-        hasMore = json.has_next_page ?? (animeList.length === PAGE_SIZE);
-    } catch {
-        // a network failure has no server message, so the friendly fallback stands
-        catalogError = true;
-    } finally {
-        loading = false;
-        render();
     }
 }
 
@@ -255,10 +249,9 @@ function setView(selectedView) {
     $("search").value = view === "ratings" ? ratingsQuery : activeQuery;
     if (selectedView === "ratings" && !ratingsReady) loadPersonalRatings(true);
     if (selectedView === "favorites" && !favoritesReady) loadFavorites();
-    if (selectedView === "all" && activeQuery) {
-        // "All Anime" means the catalog, so leave search mode behind
-        activeQuery = "";
-        load(1);
+    if (selectedView === "all" && activeQuery && !hasCatalogFilters()) {
+        $("search").value = "";
+        runSearch();
         return;
     }
     render();
@@ -517,8 +510,8 @@ document.addEventListener("keydown", (event) => {
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
 });
-prev.forEach((button) => { button.onclick = () => page > 1 && (activeQuery ? search(activeQuery, page - 1) : load(page - 1)); });
-next.forEach((button) => { button.onclick = () => (activeQuery ? search(activeQuery, page + 1) : load(page + 1)); });
+prev.forEach((button) => { button.onclick = () => page > 1 && load(page - 1); });
+next.forEach((button) => { button.onclick = () => load(page + 1); });
 $("all-anime").onclick = () => setView("all");
 $("favorites").onclick = () => setView("favorites");
 $("my-ratings").onclick = () => setView("ratings");
@@ -528,14 +521,21 @@ function runSearch() {
     const q = $("search").value.trim();
     if (view === "ratings") { ratingsQuery = q; render(); return; }
     view = "all";
-    if (!q) {
-        // an empty box means "show me the catalog", not "search for nothing"
-        activeQuery = "";
-        load(1);
-        return;
-    }
-    search(q);
+    activeQuery = q;
+    return load(1, true);
 }
+
+function clearCatalogFilters() {
+    for (const control of Object.values(catalogFilters)) control.value = "";
+    return runSearch();
+}
+
+const latestReleaseYear = new Date().getFullYear() + 5;
+catalogFilters.year.innerHTML += Array.from({ length: latestReleaseYear - 1900 + 1 }, (_, index) =>
+    `<option>${latestReleaseYear - index}</option>`
+).join("");
+for (const control of Object.values(catalogFilters)) control.onchange = runSearch;
+$("clear-filters").onclick = clearCatalogFilters;
 
 $("search-btn").onclick = runSearch;
 $("search").addEventListener("keydown", (event) => {

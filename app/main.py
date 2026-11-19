@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +28,13 @@ ROOT = Path(__file__).resolve().parents[1] / "static"
 app.mount("/static", StaticFiles(directory=ROOT), name="static")
 
 anilist = AniListClient()
+
+AnimeGenre = Literal[
+    "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror",
+    "Mahou Shoujo", "Mecha", "Music", "Mystery", "Psychological", "Romance",
+    "Sci-Fi", "Slice of Life", "Sports", "Supernatural", "Thriller",
+]
+AnimeFormat = Literal["TV", "TV_SHORT", "MOVIE", "SPECIAL", "OVA", "ONA", "MUSIC"]
 
 
 def _upstream_error(exc: Exception) -> HTTPException:
@@ -59,13 +68,14 @@ def search_anime(
     q: str = Query("", description="Title text to search for"),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=50),
+    genre: AnimeGenre | None = None,
+    year: int | None = Query(None, ge=1900, le=9998, description="First release year"),
+    media_format: AnimeFormat | None = Query(None, alias="format"),
 ):
-    # A blank query is not an error; it just has nothing to search for.
-    if not q.strip():
-        return {"query": q, "page": page, "data": [], "has_next_page": False}
-
     try:
-        result = anilist.get_search_page(q, page=page, limit=limit)
+        result = anilist.get_search_page(
+            q, page=page, limit=limit, genre=genre, year=year, media_format=media_format,
+        )
     except Exception as exc:
         raise _upstream_error(exc)
 

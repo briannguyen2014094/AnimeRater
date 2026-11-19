@@ -96,7 +96,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   outline-offset: 3px;
 }
 
-.ratings-toolbar {
+.ratings-toolbar, .catalog-filters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -105,13 +105,28 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   margin: 0 auto 24px;
 }
 
-.ratings-toolbar select {
+.ratings-toolbar select, .catalog-filters select {
   max-width: 100%;
   padding: 10px;
   background: #1e293b;
   color: #f8fafc;
   border: 1px solid #64748b;
   border-radius: 4px;
+}
+
+.catalog-filters {
+  align-items: end;
+}
+
+.catalog-filters label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+
+.catalog-filters select {
+  min-height: 44px;
+  min-width: 108px;
 }
 
 .card .anime-title {
@@ -280,16 +295,6 @@ button:disabled {
   .search-bar:focus-within {       /* glow the whole bar when the input is focused */
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-  }
-  #filter-btn {
-    border: none;
-    background-color: #334155;
-    color: #f8fafc;
-    border-radius: 999px;
-    padding: 8px 14px;
-    font-size: 1.0em;
-    flex-shrink: 0;
-    margin-right: 4px;   /* small gap before the search icon */
   }
   
    #search-btn {
