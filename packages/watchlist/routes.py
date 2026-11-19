@@ -34,6 +34,7 @@ def entry(row):
     return dict(
         json.loads(row["details"]),
         anilist_id=row["anime_id"], status=row["status"], episodes_watched=row["episodes_watched"],
+        updated_at=row["updated_at"],
     )
 
 
@@ -69,8 +70,10 @@ def save_status(anime_id: AnimeId, body: StatusUpdate, user=Depends(get_current_
     existing = find_entry(connection, *key)
     details = existing["details"] if existing else json.dumps(catalog_details(anime_id))
     row = connection.execute(
-        """INSERT INTO watchlist (user_id, anime_id, status, details) VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, anime_id) DO UPDATE SET status = excluded.status
+        """INSERT INTO watchlist (user_id, anime_id, status, details, updated_at)
+        VALUES (?, ?, ?, ?, CAST(strftime('%s','now') AS INTEGER))
+        ON CONFLICT(user_id, anime_id) DO UPDATE SET
+            status = excluded.status, updated_at = excluded.updated_at
         RETURNING *""",
         (*key, body.status, details),
     ).fetchone()
@@ -86,7 +89,8 @@ def save_progress(connection, user_id, anime_id, count):
     # Use one UPDATE so simultaneous increments apply to the current stored count.
     row = connection.execute(
         """UPDATE watchlist
-        SET episodes_watched = COALESCE(:count, episodes_watched + 1), details = :details
+        SET episodes_watched = COALESCE(:count, episodes_watched + 1), details = :details,
+            updated_at = CAST(strftime('%s','now') AS INTEGER)
         WHERE user_id = :user_id AND anime_id = :anime_id
             AND COALESCE(:count, episodes_watched + 1) <= :limit
         RETURNING *""",

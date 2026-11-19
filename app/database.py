@@ -69,6 +69,7 @@ def initialize_database(database_path=DATABASE_PATH):
                 episodes_watched INTEGER NOT NULL DEFAULT 0
                     CHECK (episodes_watched BETWEEN 0 AND 9007199254740991),
                 details TEXT NOT NULL,
+                updated_at INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (user_id, anime_id)
             );
         """)
@@ -78,6 +79,16 @@ def initialize_database(database_path=DATABASE_PATH):
         favorite_columns = {row["name"] for row in connection.execute("PRAGMA table_info(favorites)")}
         if "details" not in favorite_columns:
             connection.execute("ALTER TABLE favorites ADD COLUMN details TEXT NOT NULL DEFAULT '{}'")
+        watchlist_columns = {row["name"] for row in connection.execute("PRAGMA table_info(watchlist)")}
+        if "updated_at" not in watchlist_columns:
+            connection.execute("ALTER TABLE watchlist ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        # Rows created before this column have no update history; use the migration time.
+        connection.execute(
+            "UPDATE watchlist SET updated_at = CAST(strftime('%s','now') AS INTEGER) WHERE updated_at = 0"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS watchlist_user_updated ON watchlist(user_id, updated_at DESC)"
+        )
         initialize_ratings(connection)
 
 
